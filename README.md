@@ -1,4 +1,4 @@
-![canbus-rs-intro](docs/asset/tux-iotbzh-canbus.png)
+!<img align="right" width="180"  src="docs/asset/tux-iotbzh-canbus.png>
 ## Introduction
 
 Following libraries/crates interfaces can-socket Linux Kernel capabilities with Rust world.
@@ -25,10 +25,18 @@ WARNING:
  * dbc definition quickly generate huge rust parser rust code (use parser white list to reduce size)
 
 Community Support:
-![community-spport](docs/asset/matrix-redpesk-community.png)
-
 * https://matrix.to/#/#redpesk-core:matrix.org
 * please keep github only for push request
+![community-spport](docs/asset/matrix-redpesk-community.png)
+
+
+## Architecture
+
+### General architecture
+![canbus-rs-archi](docs/asset/canbus-rs-archi.jpg)
+
+### Can Message Pool Apis
+![canbus-rs-pool](docs/asset/canbus-rs-pool.jpg)
 
 ## Dependencies
 
@@ -58,11 +66,11 @@ cargo build
 To simulate CAN message injection, you need a vcan device
 
 ```bash
-    echo sudo dnf/zypper install can-utils
-    sudo modprobe vcan
-    sudo ip link add dev vcan0 type vcan
-    sudo ip link set vcan0 up
-    ip addr | grep "can"  ;# check interface is up
+echo sudo dnf/zypper install can-utils
+sudo modprobe vcan
+sudo ip link add dev vcan0 type vcan
+sudo ip link set vcan0 up
+ip addr | grep "can"  ;# check interface is up
 ```
 
 ## Start a demo
@@ -72,34 +80,17 @@ To simulate CAN message injection, you need a vcan device
     * canplayer vcan0=elmcan -v -I examples/dbc-log/candump.log -l i -g 1
 
 * start dnc-player
-    * ./target/debug/can-display [vcan0] [rate-ms] [timeout-ms]
-
 ```
 [fulup@fulup-laptop canbus-rs]$ ~/.cargo/build/debug/can-display vcan0 500
-
 (1) => CanID:280 opcode:RxChanged stamp:1681732233413819
   -- DiAccelPedalPos           value:30.400   (f64) status:Updated age:0
   -- DiBrakePedalState         value:0         (u8) status:Unchanged age:0
   -- DiDriveBlocked            value:0         (u8) status:Unchanged age:0
-  -- DiEpbRequest              value:0         (u8) status:Unchanged age:0
-  -- DiGear                    value:4         (u8) status:Updated age:0
-  -- DiImmobilizerState        value:3         (u8) status:Updated age:0
-  -- DiProximity               value:false   (bool) status:Unset age:0
-  -- DiRegenLight              value:false   (bool) status:Unset age:0
-  -- DiSystemState             value:5         (u8) status:Updated age:0
-  -- DiSystemStatusChecksum    value:134       (u8) status:Updated age:0
-  -- DiSystemStatusCounter     value:4         (u8) status:Updated age:0
-  -- DiTrackModeState          value:0         (u8) status:Unchanged age:0
-  -- DiTractionControlMode     value:0         (u8) status:Unchanged age:0
-  -- DiKeepDrivePowerStateReqt value:true   (bool) status:Unset age:0
-
+  ...
 ```
 
 ![can-display](docs/asset/can-display-demo.png)
 
-## Architecture
-![canbus-rs-archi](docs/asset/canbus-rs-archi.jpg)
-![canbus-rs-pool](docs/asset/canbus-rs-pool.jpg)
 
 
 
