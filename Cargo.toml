@@ -1,0 +1,7 @@
+[workspace]
+
+members = [
+    "dbcparser-lib",
+    "sockcan-lib",
+    "examples/demo",
+]

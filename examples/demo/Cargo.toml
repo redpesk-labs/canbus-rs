@@ -1,0 +1,29 @@
+[package]
+name = "can-demo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bitvec = { version = "1.0", default-features = false }
+lib_sockcan= {path ="../../sockcan-lib"}
+lib_dbcparser= {path ="../../dbcparser-lib"}
+bitflags = "1"
+
+[build-dependencies]
+lib_dbcparser= {path ="../../dbcparser-lib"}
+
+[[bin]]
+name = "can-read"
+path = "src/read_can.rs"
+
+[[bin]]
+name = "can-bmc"
+path = "src/read_bcm.rs"
+
+[[bin]]
+name = "can-dbc"
+path = "src/parse_dbc.rs"
+
+[[bin]]
+name = "can-display"
+path = "src/can-display.rs"

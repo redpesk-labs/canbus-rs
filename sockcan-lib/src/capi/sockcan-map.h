@@ -1,0 +1,342 @@
+/*
+ * Copyright (C) 2015-2022 IoT.bzh Company
+ * Author: Fulup Ar Foll <fulup@iot.bzh>
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#define _GNU_SOURCE
+
+// reference: https://github.com/craigpeacock/CAN-Examples/blob/master/canreceive.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
+
+#include <net/if.h>
+#include <sys/ioctl.h>
+#include <time.h>
+#include <sys/socket.h>
+#include <linux/sockios.h>
+#include <linux/net_tstamp.h>
+
+#include <linux/can.h>
+#include <linux/can/raw.h>
+#include <linux/can/bcm.h>
+#include <linux/can/error.h>
+#include <linux/can/gw.h>
+#include <linux/can/isotp.h>
+#include <linux/can/j1939.h>
+#include <linux/can/netlink.h>
+
+#define MAX_BCM_CAN_FRAMES 128
+#define MAX_ISOTP_FRAMES 4096
+#define TIME_STAMP_CTRL_SZ 32
+
+// force include of few non can_ type
+typedef struct cmsghdr can_cmsghdr;
+typedef struct cmsg can_cmsg;
+typedef struct timeval can_timeval;
+typedef struct timespec can_timespec;
+
+typedef struct {
+        struct bcm_msg_head head;
+        struct can_frame frames[MAX_BCM_CAN_FRAMES];
+} can_bcm_msg;
+
+typedef struct {
+        struct bcm_msg_head head;
+        struct canfd_frame fdframes[MAX_BCM_CAN_FRAMES];
+} canfd_bcm_msg;
+
+typedef struct {
+        struct bcm_msg_head head;
+        struct can_frame frame;
+} can_bcm_one_msg;
+
+typedef struct {
+        struct bcm_msg_head head;
+        struct canfd_frame frame;
+} canfd_bcm_one_msg;
+
+typedef struct {
+    struct cmsghdr head;
+    char control[TIME_STAMP_CTRL_SZ];
+} can_stamp_msg;
+
+enum can_CMSG {
+    CMSG_DATA,
+    CMSG_FIRSTHDR,
+    CMSG_NXTHDR,
+};
+
+
+enum can_SOCK {
+    x_PF_CAN= PF_CAN,
+    x_AF_CAN= AF_CAN,
+    x_SOCK_RAW= SOCK_RAW,
+    x_IFACE_LEN=IFNAMSIZ,
+    x_SIOCGIFINDEX=SIOCGIFINDEX,
+    x_SIOCGIFNAME=SIOCGIFNAME,
+    x_SIOCGSTAMP=SIOCGSTAMP,
+    x_SFF_ID_BITS=CAN_SFF_ID_BITS,
+    x_EFF_ID_BITS=CAN_EFF_ID_BITS,
+    x_MAX_DLC=CAN_MAX_DLC,
+    x_MAX_RAW_DLC=CAN_MAX_RAW_DLC,
+    x_MAX_DLEN=CAN_MAX_DLEN,
+    x_FD_MAX_DLC=CANFD_MAX_DLC,
+    x_FD_MAX_DLEN=CANFD_MAX_DLEN,
+    x_SOCK_DGRAM= SOCK_DGRAM,
+    x_F_GETFL= F_GETFL,
+    x_F_SETFL= F_SETFL,
+    x_NONBLOCK=O_NONBLOCK,
+    x_SOL_SOCKET=SOL_SOCKET,
+    x_SO_SNDTIMEO=SO_SNDTIMEO,
+    x_SO_RCVTIMEO=SO_RCVTIMEO,
+    x_MSG_EOR=MSG_EOR,
+    x_MAX_BCM_CAN_FRAMES=MAX_BCM_CAN_FRAMES,
+    x_MAX_ISOTP_FRAMES=MAX_ISOTP_FRAMES,
+    x_SIOCGIFMTU=SIOCGIFMTU,
+};
+
+enum can_MASK {
+    x_SFF_MASK=CAN_SFF_MASK,
+    x_EFF_MASK=CAN_EFF_MASK,
+    x_ERR_MASK=CAN_ERR_MASK,
+};
+
+enum can_PF {
+    x_RAW= CAN_RAW,
+    x_BCM= CAN_BCM,
+    x_TP16= CAN_TP16,
+    x_TP20= CAN_TP20,
+    x_MCNET= CAN_MCNET,
+    x_ISOTP= CAN_ISOTP,
+    x_J1939= CAN_J1939,
+    x_NPROTO= CAN_NPROTO,
+};
+
+enum can_MTU {
+    x_MTU= CAN_MTU,
+    x_FD_MTU=CANFD_MTU
+};
+
+enum can_FILTER {
+    x_INV_FILTER= CAN_INV_FILTER,
+    x_RAW_FILTER_MAX= CAN_RAW_FILTER_MAX,
+};
+
+enum can_FLAGS {
+    x_FD_BRS= CANFD_BRS,
+    x_FD_ESI= CANFD_ESI,
+    x_FD_FDF= CANFD_FDF,
+    x_EFF_FLAG= CAN_EFF_FLAG,
+    x_RTR_FLAG= CAN_RTR_FLAG,
+    x_ERR_FLAG=CAN_ERR_FLAG,
+};
+
+enum can_BCM_FLAG {
+    x_SETTIMER = SETTIMER ,
+    x_STARTTIMER= STARTTIMER,
+    x_TX_COUNTEVT= TX_COUNTEVT,
+    x_TX_ANNOUNCE= TX_ANNOUNCE,
+    x_TX_CP_CAN_ID= TX_CP_CAN_ID,
+    x_RX_FILTER_ID= RX_FILTER_ID,
+    x_RX_CHECK_DLC= RX_CHECK_DLC,
+    x_RX_NO_AUTOTIMER= RX_NO_AUTOTIMER,
+    x_RX_ANNOUNCE_RESUME= RX_ANNOUNCE_RESUME,
+    x_TX_RESET_MULTI_IDX= TX_RESET_MULTI_IDX,
+    x_RX_RTR_FRAME      = RX_RTR_FRAME ,
+    x_FD_FRAME = CAN_FD_FRAME ,
+};
+
+enum can_BCM_OPE {
+    x_TX_SETUP=TX_SETUP,
+    x_TX_DELETE=TX_DELETE,
+    x_TX_READ=TX_READ,
+    x_TX_SEND=TX_SEND,
+    x_TX_STATUS=TX_STATUS,
+    x_TX_EXPIRED=TX_EXPIRED,
+    x_RX_SETUP=RX_SETUP,
+    x_RX_DELETE=RX_DELETE,
+    x_RX_READ=RX_READ,
+    x_RX_STATUS=RX_STATUS,
+    x_RX_TIMEOUT=RX_TIMEOUT,
+    x_RX_CHANGED=RX_CHANGED,
+};
+
+enum can_ERROR {
+    x_DLC = CAN_ERR_DLC,
+    x_TX_TIMEOUT = CAN_ERR_TX_TIMEOUT,
+    x_LOSTARB = CAN_ERR_LOSTARB,
+    x_CRTL = CAN_ERR_CRTL,
+    x_PROT = CAN_ERR_PROT,
+    x_TRX = CAN_ERR_TRX,
+    x_ACK = CAN_ERR_ACK,
+    x_BUSOFF = CAN_ERR_BUSOFF,
+    x_BUSERROR = CAN_ERR_BUSERROR,
+    x_RESTARTED = CAN_ERR_RESTARTED,
+
+    x_LOSTARB_UNSPEC = CAN_ERR_LOSTARB_UNSPEC,
+};
+
+enum can_CTRL {
+    x_CRTL_UNSPEC = CAN_ERR_CRTL_UNSPEC,
+    x_CRTL_RX_OVERFLOW = CAN_ERR_CRTL_RX_OVERFLOW,
+    x_CRTL_TX_OVERFLOW = CAN_ERR_CRTL_TX_OVERFLOW,
+    x_CRTL_RX_WARNING = CAN_ERR_CRTL_RX_WARNING,
+    x_CRTL_TX_WARNING = CAN_ERR_CRTL_TX_WARNING,
+    x_CRTL_RX_PASSIVE = CAN_ERR_CRTL_RX_PASSIVE,
+    x_CRTL_TX_PASSIVE = CAN_ERR_CRTL_TX_PASSIVE,
+
+    x_CRTL_ACTIVE = CAN_ERR_CRTL_ACTIVE,
+
+    x_PROT_UNSPEC = CAN_ERR_PROT_UNSPEC,
+    x_PROT_BIT = CAN_ERR_PROT_BIT,
+    x_PROT_FORM = CAN_ERR_PROT_FORM,
+    x_PROT_STUFF = CAN_ERR_PROT_STUFF,
+    x_PROT_BIT0 = CAN_ERR_PROT_BIT0,
+    x_PROT_BIT1 = CAN_ERR_PROT_BIT1,
+    x_PROT_OVERLOAD = CAN_ERR_PROT_OVERLOAD,
+    x_PROT_ACTIVE = CAN_ERR_PROT_ACTIVE,
+    x_PROT_TX = CAN_ERR_PROT_TX,
+
+    x_PROT_LOC_UNSPEC = CAN_ERR_PROT_LOC_UNSPEC,
+    x_PROT_LOC_SOF = CAN_ERR_PROT_LOC_SOF,
+    x_PROT_LOC_ID28_21 = CAN_ERR_PROT_LOC_ID28_21,
+    x_PROT_LOC_ID20_18 = CAN_ERR_PROT_LOC_ID20_18,
+    x_PROT_LOC_SRTR = CAN_ERR_PROT_LOC_SRTR,
+    x_PROT_LOC_IDE = CAN_ERR_PROT_LOC_IDE,
+    x_PROT_LOC_ID17_13 = CAN_ERR_PROT_LOC_ID17_13,
+    x_PROT_LOC_ID12_05 = CAN_ERR_PROT_LOC_ID12_05,
+    x_PROT_LOC_ID04_00 = CAN_ERR_PROT_LOC_ID04_00,
+    x_PROT_LOC_RTR = CAN_ERR_PROT_LOC_RTR,
+    x_PROT_LOC_RES1 = CAN_ERR_PROT_LOC_RES1,
+    x_PROT_LOC_RES0 = CAN_ERR_PROT_LOC_RES0,
+    x_PROT_LOC_DLC = CAN_ERR_PROT_LOC_DLC,
+    x_PROT_LOC_DATA = CAN_ERR_PROT_LOC_DATA,
+    x_PROT_LOC_CRC_SEQ = CAN_ERR_PROT_LOC_CRC_SEQ,
+    x_PROT_LOC_CRC_DEL = CAN_ERR_PROT_LOC_CRC_DEL,
+    x_PROT_LOC_ACK = CAN_ERR_PROT_LOC_ACK,
+    x_PROT_LOC_ACK_DEL = CAN_ERR_PROT_LOC_ACK_DEL,
+    x_PROT_LOC_EOF = CAN_ERR_PROT_LOC_EOF,
+    x_PROT_LOC_INTERM = CAN_ERR_PROT_LOC_INTERM,
+
+    x_TRX_UNSPEC = CAN_ERR_TRX_UNSPEC,
+    x_TRX_CANH_NO_WIRE = CAN_ERR_TRX_CANH_NO_WIRE,
+    x_TRX_CANH_SHORT_TO_BAT = CAN_ERR_TRX_CANH_SHORT_TO_BAT,
+    x_TRX_CANH_SHORT_TO_VCC = CAN_ERR_TRX_CANH_SHORT_TO_VCC,
+    x_TRX_CANH_SHORT_TO_GND = CAN_ERR_TRX_CANH_SHORT_TO_GND,
+    x_TRX_CANL_NO_WIRE = CAN_ERR_TRX_CANL_NO_WIRE,
+    x_TRX_CANL_SHORT_TO_BAT = CAN_ERR_TRX_CANL_SHORT_TO_BAT,
+    x_TRX_CANL_SHORT_TO_VCC = CAN_ERR_TRX_CANL_SHORT_TO_VCC,
+    x_TRX_CANL_SHORT_TO_GND = CAN_ERR_TRX_CANL_SHORT_TO_GND,
+    x_TRX_CANL_SHORT_TO_CANH = CAN_ERR_TRX_CANL_SHORT_TO_CANH,
+};
+
+enum can_CGW {
+    x_TYPE_MAX = CGW_TYPE_MAX,
+    x_MAX = CGW_MAX,
+    x_FLAGS_CAN_ECHO = CGW_FLAGS_CAN_ECHO,
+    x_FLAGS_CAN_SRC_TSTAMP = CGW_FLAGS_CAN_SRC_TSTAMP,
+    x_FLAGS_CAN_IIF_TX_OK = CGW_FLAGS_CAN_IIF_TX_OK,
+    x_FLAGS_CAN_FD = CGW_FLAGS_CAN_FD,
+    x_MOD_FUNCS = CGW_MOD_FUNCS,
+    x_MOD_ID = CGW_MOD_ID,
+    x_MOD_DLC	 = CGW_MOD_DLC	,
+    x_MOD_LEN	 = CGW_MOD_LEN,
+    x_MOD_DATA = CGW_MOD_DATA,
+    x_MOD_FLAGS = CGW_MOD_FLAGS,
+    x_FRAME_MODS = CGW_FRAME_MODS,
+    can_MAX_MODFUNCTIONS = MAX_MODFUNCTIONS,
+    x_MODATTR_LEN = CGW_MODATTR_LEN,
+    x_FDMODATTR_LEN = CGW_FDMODATTR_LEN,
+    x_CS_XOR_LEN = CGW_CS_XOR_LEN,
+    x_CS_CRC8_LEN = CGW_CS_CRC8_LEN,
+    x_CRC8PRF_MAX = CGW_CRC8PRF_MAX,
+};
+
+enum can_ISOTP {
+    can_SOL_CAN_ISOTP = SOL_CAN_ISOTP,
+    x_ISOTP_OPTS = CAN_ISOTP_OPTS,
+    x_ISOTP_RECV_FC = CAN_ISOTP_RECV_FC,
+    x_ISOTP_TX_STMIN = CAN_ISOTP_TX_STMIN,
+    x_ISOTP_RX_STMIN = CAN_ISOTP_RX_STMIN,
+    x_ISOTP_LL_OPTS = CAN_ISOTP_LL_OPTS,
+    x_ISOTP_LISTEN_MODE = CAN_ISOTP_LISTEN_MODE,
+    x_ISOTP_EXTEND_ADDR = CAN_ISOTP_EXTEND_ADDR,
+    x_ISOTP_TX_PADDING = CAN_ISOTP_TX_PADDING,
+    x_ISOTP_RX_PADDING = CAN_ISOTP_RX_PADDING,
+    x_ISOTP_CHK_PAD_LEN = CAN_ISOTP_CHK_PAD_LEN,
+    x_ISOTP_CHK_PAD_DATA = CAN_ISOTP_CHK_PAD_DATA,
+    x_ISOTP_HALF_DUPLEX = CAN_ISOTP_HALF_DUPLEX,
+    x_ISOTP_FORCE_TXSTMIN = CAN_ISOTP_FORCE_TXSTMIN,
+    x_ISOTP_FORCE_RXSTMIN = CAN_ISOTP_FORCE_RXSTMIN,
+    x_ISOTP_RX_EXT_ADDR = CAN_ISOTP_RX_EXT_ADDR,
+    x_ISOTP_WAIT_TX_DONE = CAN_ISOTP_WAIT_TX_DONE,
+    x_ISOTP_SF_BROADCAST = CAN_ISOTP_SF_BROADCAST,
+    x_ISOTP_DEFAULT_FLAGS = CAN_ISOTP_DEFAULT_FLAGS,
+    x_ISOTP_DEFAULT_EXT_ADDRESS = CAN_ISOTP_DEFAULT_EXT_ADDRESS,
+    x_ISOTP_DEFAULT_PAD_CONTENT = CAN_ISOTP_DEFAULT_PAD_CONTENT,
+    x_ISOTP_DEFAULT_FRAME_TXTIME = CAN_ISOTP_DEFAULT_FRAME_TXTIME,
+    x_ISOTP_DEFAULT_RECV_BS = CAN_ISOTP_DEFAULT_RECV_BS,
+    x_ISOTP_DEFAULT_RECV_STMIN = CAN_ISOTP_DEFAULT_RECV_STMIN,
+    x_ISOTP_DEFAULT_RECV_WFTMAX = CAN_ISOTP_DEFAULT_RECV_WFTMAX,
+    x_ISOTP_DEFAULT_LL_MTU = CAN_ISOTP_DEFAULT_LL_MTU,
+    x_ISOTP_DEFAULT_LL_TX_DL = CAN_ISOTP_DEFAULT_LL_TX_DL,
+    x_ISOTP_DEFAULT_LL_TX_FLAGS = CAN_ISOTP_DEFAULT_LL_TX_FLAGS,
+};
+
+enum can_J1939 {
+    x_MAX_UNICAST_ADDR = J1939_MAX_UNICAST_ADDR,
+    x_IDLE_ADDR = J1939_IDLE_ADDR,
+    x_NO_ADDR = J1939_NO_ADDR,
+    x_NO_NAME = J1939_NO_NAME,
+    x_PGN_REQUEST = J1939_PGN_REQUEST,
+    x_PGN_ADDRESS_CLAIMED = J1939_PGN_ADDRESS_CLAIMED,
+    x_PGN_ADDRESS_COMMANDED = J1939_PGN_ADDRESS_COMMANDED,
+    x_PGN_PDU1_MAX = J1939_PGN_PDU1_MAX,
+    x_PGN_MAX = J1939_PGN_MAX,
+    x_NO_PGN = J1939_NO_PGN,
+    x_SOL_CAN_J1939 = SOL_CAN_J1939,
+    x_FILTER_MAX = J1939_FILTER_MAX,
+};
+
+enum can_NETLINK {
+    x_CTRLMODE_LOOPBACK = CAN_CTRLMODE_LOOPBACK,
+    x_CTRLMODE_LISTENONLY = CAN_CTRLMODE_LISTENONLY,
+    x_CTRLMODE_3_SAMPLES = CAN_CTRLMODE_3_SAMPLES,
+    x_CTRLMODE_ONE_SHOT = CAN_CTRLMODE_ONE_SHOT,
+    x_CTRLMODE_BERR_REPORTING = CAN_CTRLMODE_BERR_REPORTING,
+    x_CTRLMODE_FD = CAN_CTRLMODE_FD,
+    x_CTRLMODE_PRESUME_ACK = CAN_CTRLMODE_PRESUME_ACK,
+    x_CTRLMODE_FD_NON_ISO = CAN_CTRLMODE_FD_NON_ISO,
+    x_CTRLMODE_CC_LEN8_DLC = CAN_CTRLMODE_CC_LEN8_DLC,
+    x_IFLA_CAN_MAX = IFLA_CAN_MAX,
+    x_TERMINATION_DISABLED = CAN_TERMINATION_DISABLED,
+};
+
+enum can_RAW {
+    x_SOL_CAN_RAW=SOL_CAN_RAW,
+    x_LOOPBACK=CAN_RAW_LOOPBACK,
+    x_RECV_OWN_MSGS= CAN_RAW_RECV_OWN_MSGS,
+    x_FILTER=CAN_RAW_FILTER,
+    x_SO_TIMESTAMP=SO_TIMESTAMP,
+    x_SO_TIMESTAMPNS=SO_TIMESTAMPNS,
+    x_SO_TIMESTAMPING=SO_TIMESTAMPING,
+    x_SO_TIMESTAMP_NEW=SO_TIMESTAMP_NEW,
+    x_SOF_TIMESTAMPING_RX_HARDWARE=SOF_TIMESTAMPING_RX_HARDWARE,
+    x_SOF_TIMESTAMPING_RX_SOFTWARE=SOF_TIMESTAMPING_RX_SOFTWARE,
+};

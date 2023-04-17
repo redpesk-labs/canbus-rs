@@ -1,0 +1,28 @@
+{
+  "name": "afb-test",
+  "no-ldpaths": true,
+  "alias": ["/devtools:/usr/share/afb-ui-devtools/binder"],
+  "threads-max": 10,
+  "monitoring": true,
+
+  "binding": [
+    {
+        "uid": "sockcan-binding",
+        "path": "$HOME/.cargo/build/debug/libafb_sockcan.so",
+        "info": "RUST sockcan/DBC APIs"
+    },
+    {
+        "uid": "tap-test-binding",
+        "path": "$HOME/.cargo/build/debug/examples/libtap_sockcan.so",
+        "info": "Rust sockcan API TAP/Test"
+    }
+  ],
+
+  "set" : {
+    "tap-test": {
+      "autostart": false,
+      "autoexit": false,
+      "output": "tap"
+    }
+  }
+}

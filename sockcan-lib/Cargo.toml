@@ -1,0 +1,24 @@
+# dynamic linking references:
+#     linking https://zicklag.github.io/rust-tutorials/rust-plugins.html
+#     http://blog.pnkfx.org/blog/2022/05/12/linking-rust-crates/
+#
+#     set rustflags = ["-C","prefer-dynamic"] withing .cargo/config [build] section
+#     export LD_LIBRARY_PATH=$(rustc --print=sysroot)/lib $MY_PROJECT/target/*
+# ---------------------------------------------------------------------------------------
+
+[package]
+name = "lib_sockcan"
+version = "0.1.0"
+authors = ["fulup@iot.bzh"]
+
+[build-dependencies]
+bindgen    = ">=0.6"
+cc = "1"
+
+[dependencies]
+bitflags = "2"
+
+[lib]
+name = "sockcan"
+crate-type = ["lib"]
+path = "src/sockcan-lib.rs"
