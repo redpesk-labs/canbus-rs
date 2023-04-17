@@ -312,7 +312,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
             code_output!(code, IDT3, "if newval != self.value {")?;
             code_output!(code, IDT4, "self.value= newval;")?;
             code_output!(code, IDT4, "self.status= CanDataStatus::Updated;")?;
-            code_output!(code, IDT3, "self.stamp= _stamp;")?;
+            code_output!(code, IDT4, "self.stamp= _stamp;")?;
             code_output!(code, IDT3, "} else {")?;
             code_output!(code, IDT4, "self.status= CanDataStatus::Unchanged;")?;
             code_output!(code, IDT3, "}")?;
@@ -320,7 +320,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
             code_output!(code, IDT3, "if self.value != value {")?;
             code_output!(code, IDT4, "self.value= value;")?;
             code_output!(code, IDT4, "self.status= CanDataStatus::Updated;")?;
-            code_output!(code, IDT3, "self.stamp= _stamp;")?;
+            code_output!(code, IDT4, "self.stamp= _stamp;")?;
             code_output!(code, IDT3, "} else {")?;
             code_output!(code, IDT4, "self.status= CanDataStatus::Unchanged;")?;
             code_output!(code, IDT3, "}")?;
