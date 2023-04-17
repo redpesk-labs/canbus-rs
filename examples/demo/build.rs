@@ -36,8 +36,9 @@ fn main() {
         .dbcfile(dbc_infile)
         .outfile(dbc_outfile)
         .header(header)
+        .range_check(true)
         //.blacklist(vec![512, 200])
-        .whitelist(vec![280])
+        .whitelist(vec![280,614,599]) // restrict generated code size to candump.log messages
         .generate()
         .expect("Fail to parse dbc-file'\n");
 }

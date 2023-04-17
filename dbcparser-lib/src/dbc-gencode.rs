@@ -27,12 +27,14 @@ const IDT5: &str = "                    ";
 pub struct DbcCodeGen {
     outfd: Option<File>,
     dbcfd: DbcObject,
+    range_check: bool,
 }
 
 pub struct DbcParser {
     uid: &'static str,
     infile: Option<String>,
     outfile: Option<String>,
+    range_check: bool,
     header: Option<&'static str>,
     whitelist: Option<Vec<u32>>,
     blacklist: Option<Vec<u32>>,
@@ -640,19 +642,18 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
 
         if self.size == 1 {
             code_output!(code, IDT3, "let value = value as u8;")?;
-        } else if self.offset != 0.0 || self.factor != 1.0 {
-            code_output!(code, IDT3, "#[cfg(feature = \"range_checked\")]")?;
+        } else if code.range_check && (self.offset != 0.0 || self.factor != 1.0) {
             code_output!(
                 code,
                 IDT3,
                 "if value < {}_{} || {}_{} < value {{",
-                self.get_data_type(),
                 self.min,
+                self.get_data_type(),
                 self.max,
                 self.get_data_type()
             )?;
             code_output!(code,IDT4,
-                    "return Err(CanError::new(\"invalid-signal-value\",\"value={{}} not in [{}..{}]\",value));", self.min, self.max)?;
+                    "return Err(CanError::new(\"invalid-signal-value\",format!(\"value={{}} not in [{}..{}]\",value)));", self.min, self.max)?;
             code_output!(code, IDT3, "}")?;
             code_output!(code, IDT3, "let factor = {}_f64;", self.factor)?;
             code_output!(code, IDT3, "let offset = {}_f64;", self.offset)?;
@@ -1007,6 +1008,7 @@ impl DbcParser {
     pub fn new(uid: &'static str) -> Self {
         DbcParser {
             uid: uid,
+            range_check: true,
             infile: None,
             outfile: None,
             header: None,
@@ -1037,6 +1039,11 @@ impl DbcParser {
 
     pub fn blacklist(&mut self, canids: Vec<u32>) -> &mut Self {
         self.blacklist = Some(canids);
+        self
+    }
+
+    pub fn range_check(&mut self, flag: bool) -> &mut Self {
+        self.range_check = flag;
         self
     }
 
@@ -1093,6 +1100,7 @@ impl DbcParser {
         let code = DbcCodeGen {
             dbcfd: dbcfd,
             outfd: outfd,
+            range_check: self.range_check,
         };
 
         match self.header {
