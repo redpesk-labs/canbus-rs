@@ -4,6 +4,7 @@ target/
 *.tar.gz
 __*
 ~*
+.~*
 *profraw
 cargo-test*
 Cargo.lock
