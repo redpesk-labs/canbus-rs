@@ -37,7 +37,7 @@ fn main() {
         .outfile(dbc_outfile)
         .header(header)
         //.blacklist(vec![512, 200])
-        //.whitelist(vec![512])
+        .whitelist(vec![280])
         .generate()
         .expect("Fail to parse dbc-file'\n");
 }
