@@ -27,8 +27,8 @@ WARNING:
 Community Support:
 * https://matrix.to/#/#redpesk-core:matrix.org
 * please keep github only for push request
-![community-spport](docs/asset/matrix-redpesk-community.png)
 
+![community-spport](docs/asset/matrix-redpesk-community.png)
 
 ## Architecture
 
