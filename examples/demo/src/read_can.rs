@@ -12,11 +12,11 @@ extern crate sockcan;
 use sockcan::prelude::*;
 
 
-fn main() {
+fn main() -> Result <(), String> {
     const VCAN: &str = "vcan0";
 
     let sockfd = match SockCanHandle::open_raw(VCAN, CanTimeStamp::CLASSIC) {
-        Err(error) => panic!("fail opening candev {}", error.to_string()),
+        Err(error) => return Err(format!("fail opening candev {}", error.to_string())),
         Ok(value) => value,
     };
 
@@ -25,7 +25,7 @@ fn main() {
         .add_whitelist(0x118, FilterMask::ERR_FLAG | FilterMask::SFF_MASK)
         .apply(&sockfd)
     {
-        Err(error) => panic!("raw-filer fail filter Error:{}", error.to_string()),
+        Err(error) => return Err(format!("raw-filer fail filter Error:{}", error.to_string())),
         Ok(()) => {}
     }
 

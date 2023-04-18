@@ -436,6 +436,7 @@ impl CanIFaceFrom<u32> for SockCanHandle {
 }
 
 impl SockCanHandle {
+
     pub fn open_raw<T>(candev: T, timestamp: CanTimeStamp) -> Result<Self, CanError>
     where
         SockCanHandle: CanIFaceFrom<T>,
@@ -538,6 +539,14 @@ impl SockCanHandle {
         }
 
         Ok(sockcan)
+    }
+
+    pub fn close (&self) {
+       unsafe {cglue::close(self.sockfd)};
+    }
+
+    pub fn as_rawfd (&self) -> i32 {
+       self.sockfd
     }
 
     pub fn set_blocking(&mut self, blocking: bool) -> Result<&mut Self, CanError> {
@@ -697,18 +706,6 @@ impl SockCanHandle {
         }
         Ok(self)
     }
-
-    // pub fn get_bcm_frame(&self) -> Result<BcmAnyMsg, CanError> {
-    //     let frame = CanBcmMsg::empty();
-    //     let count =
-    //         unsafe { cglue::read(self.sockfd, frame.as_raw(), mem::size_of::<CanBcmMsg>()) };
-
-    //     if count < 0 {
-    //         Err(CanError::new("bcm-read-fail", cglue::get_perror()))
-    //     } else {
-    //         Ok(frame)
-    //     }
-    // }
 
     pub fn get_raw_frame(&self) -> CanAnyFrame {
         #[allow(invalid_value)]

@@ -9,12 +9,11 @@
 use std::fmt;
 use super::cglue;
 
+
 pub struct CanError {
     uid: String,
     info: String,
 }
-
-
 #[derive(Copy, Clone, Debug)]
 pub enum CanBcmOpCode {
     TxSetup,
@@ -32,6 +31,7 @@ pub enum CanBcmOpCode {
     Unknown,
 }
 
+#[cfg_attr(feature = "serde", derive(Serialize,Deserialize))]
 pub struct CanMsgData<'a> {
     pub canid: u32,
     pub len: u8,
@@ -39,7 +39,6 @@ pub struct CanMsgData<'a> {
     pub opcode: CanBcmOpCode,
     pub data: &'a[u8],
 }
-
 
 impl Clone for CanError {
     fn clone (&self) -> CanError {

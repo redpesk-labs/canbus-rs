@@ -66,7 +66,7 @@ fn main() -> Result<(), CanError> {
         )
         .set_timers(rate, watchdog)
         .apply(&sock)?;
-    }
+    };
 
     // loop on message reception and decode messages
     let mut count = 0;

@@ -12,11 +12,11 @@ extern crate sockcan;
 
 use sockcan::prelude::*;
 
-fn main() {
+fn main() -> Result <(), String>{
     const VCAN: &str = "vcan0";
 
     let sock = match SockCanHandle::open_bcm(VCAN, CanTimeStamp::CLASSIC) {
-        Err(error) => panic!("fail opening candev {}", error.to_string()),
+        Err(error) => return Err(format!("fail opening candev {}", error.to_string())),
         Ok(value) => value,
     };
 
@@ -37,7 +37,25 @@ fn main() {
     .set_timers(500, 1000)
     .apply(&sock)
     {
-        Err(error) => panic!("bcm-filter fail Error:{}", error.to_string()),
+        Err(error) => return Err(format!("bcm-filter fail Error {}", error.to_string())),
+        Ok(()) => println!("sockbcm filter ready"),
+    }
+
+    // to create an independent pool of listened messages simply reopen a new sockbmc channel
+    let sock2 = match SockCanHandle::open_bcm(VCAN, CanTimeStamp::CLASSIC) {
+        Err(error) => return Err(format!("fail opening candev {}", error.to_string())),
+        Ok(value) => value,
+    };
+
+    match SockBcmCmd::new(
+        CanBcmOpCode::RxSetup,
+        CanBcmFlag::RX_FILTER_ID | CanBcmFlag::SET_TIMER,
+        0x118,
+    )
+    .set_timers(500, 1000)
+    .apply(&sock2)
+    {
+        Err(error) => return Err(format!("bcm-filter fail Error {}", error.to_string())),
         Ok(()) => println!("sockbcm filter ready"),
     }
 
@@ -51,6 +69,7 @@ fn main() {
     let mut count = 0;
     loop {
         count += 1;
+
         let msg = sock.get_bcm_frame();
         match msg.get_opcode() {
             CanBcmOpCode::RxChanged => match msg.get_raw() {
