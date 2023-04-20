@@ -13,7 +13,7 @@ extern crate serde;
 
 // include generated code and Rust module as declare in build.rs->DbcParser::new("DbcSimple")
 include!("/tmp/dbc-autogen.rs");
-use DbcSimple::*;
+use crate::DbcSimple::*;
 
 use sockcan::prelude::*;
 use std::env;

@@ -1255,6 +1255,14 @@ impl DbcParser {
         code_output!(
             code,
             IDT1,
+            "fn get_messages(&mut self) -> &mut [Box<dyn CanDbcMessage>] {"
+        )?;
+        code_output!(code, IDT2, "&mut self.pool")?;
+        code_output!(code, IDT1, "}\n")?;
+
+        code_output!(
+            code,
+            IDT1,
             "pub fn get_mut(&mut self, canid: u32) -> Result<&mut dyn CanDbcMessage, CanError> {"
         )?;
         code_output!(

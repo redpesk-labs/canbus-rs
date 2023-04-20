@@ -154,5 +154,6 @@ pub trait CanDbcMessage {
 pub trait CanDbcPool {
     fn new(uid: &'static str) -> Self;
     fn get_ids(&self) -> &'static [u32];
+    fn get_messages(&mut self) -> &mut [Box<dyn CanDbcMessage>];
     fn update(&self, data: &CanMsgData) -> Result<&mut dyn CanDbcMessage, CanError>;
 }
