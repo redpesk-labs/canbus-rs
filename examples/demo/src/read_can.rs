@@ -45,6 +45,7 @@ fn main() -> Result <(), String> {
             CanAnyFrame::RawFd(frame) => println!("Received FdFrame id:{:#04x} stamp:{} len:{}", frame.get_id(), frame_stamp, frame.get_len()),
             CanAnyFrame::RawStd(frame) => println!("Received StdFrame id:{:#04x} stamp:{}", frame.get_id(), frame_stamp),
             CanAnyFrame::Err(error) => panic!("Fail reading candev Error:{}", error.to_string()),
+            CanAnyFrame::None(canid) => println!("Received Timeout id:{:#04x}", *canid),
         }
     };
 }

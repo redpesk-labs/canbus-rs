@@ -132,7 +132,7 @@ pub trait CanDbcSignal {
     fn get_name(&self) -> &'static str;
     fn get_stamp(&self) -> u64;
     fn get_status(&self) -> CanDataStatus;
-    fn update(&mut self, stamp: u64, data: &[u8]);
+    fn update(&mut self, frame: &CanMsgData);
     fn as_any(&mut self) -> &mut dyn Any;
 }
 

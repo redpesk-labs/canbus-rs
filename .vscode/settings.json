@@ -1,0 +1,19 @@
+{
+    "cSpell.words": [
+        "autoexit",
+        "cbuf",
+        "cbuffer",
+        "cglue",
+        "cstring",
+        "helloworld",
+        "libafb",
+        "tokener",
+        "userdata",
+        "vcbdata"
+    ],
+    "rust-analyzer.checkOnSave.enable": true,
+    "files.exclude": {
+        "**/Target": true
+    },
+    "rust-analyzer.showUnlinkedFileNotification": false
+}

@@ -1,0 +1,78 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "sockcan-native-compile",
+            "type": "cargo",
+            "command": "build",
+            "args": [
+            ],
+            "problemMatcher": [
+                "$rustc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "test-native-compile",
+            "type": "cargo",
+            "command": "build",
+            "dependsOn": "sockcan-native-compile",
+            "args": [
+                "--example",
+                "tap_sockcan"
+            ],
+            "problemMatcher": [
+                "$rustc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "cross-compile-afb-can",
+            "type": "cargo",
+            "command": "build",
+            "args": [
+                "--target=aarch64-unknown-linux-gnu"
+            ],
+            "problemMatcher": [
+                "$rustc"
+            ],
+            "group": "build"
+        },
+        {
+            "label": "remote-debug-setup",
+            "type": "shell",
+            "command": "${workspaceFolder}/utils/remote-debug.sh",
+            "args": [
+                "${workspaceFolder}",
+                "raspberry.local",
+                "afb-test",
+                "9999"
+            ],
+            "group": "none",
+            "dependsOn": [
+                "cross-compile-rust"
+            ]
+        },
+        {
+            "label": "native-debug-setup",
+            "type": "shell",
+            "command": "eu-strip",
+            "args": [
+                "-g",
+                "-f",
+                "${workspaceFolder}/target/debug/afb-test.debug",
+                "${workspaceFolder}/target/debug/afb-test"
+            ],
+            "group": "none",
+            "dependsOn": [
+                "native-compile-rust"
+            ]
+        },
+    ]
+}

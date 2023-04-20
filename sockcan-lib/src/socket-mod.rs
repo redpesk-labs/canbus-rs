@@ -221,6 +221,7 @@ pub enum CanAnyFrame {
     RawFd(CanFdFrameRaw),
     RawStd(CanFrameRaw),
     Err(CanError),
+    None(u32),
 }
 
 impl CanAnyFrame {
@@ -229,6 +230,7 @@ impl CanAnyFrame {
             CanAnyFrame::RawFd(frame) => Ok(frame.get_id()),
             CanAnyFrame::RawStd(frame) => Ok(frame.get_id()),
             CanAnyFrame::Err(error) => Err(error.clone()),
+            CanAnyFrame::None(canid) => Ok(*canid),
         }
     }
 
@@ -237,6 +239,7 @@ impl CanAnyFrame {
             CanAnyFrame::RawFd(frame) => Ok(frame.get_len()),
             CanAnyFrame::RawStd(frame) => Ok(frame.get_len()),
             CanAnyFrame::Err(error) => Err(error.clone()),
+            CanAnyFrame::None(_canid) => Ok(0),
         }
     }
 
@@ -245,6 +248,7 @@ impl CanAnyFrame {
             CanAnyFrame::RawFd(frame) => Ok(frame.get_data()),
             CanAnyFrame::RawStd(frame) => Ok(frame.get_data()),
             CanAnyFrame::Err(error) => Err(error.clone()),
+            CanAnyFrame::None(_canid) => Ok(&[0]),
         }
     }
 }
@@ -275,6 +279,7 @@ impl From<*const CanFdFrameRaw> for CanAnyFrame {
 
 struct CanBcmOneMsg(cglue::can_bcm_one_msg);
 struct CanFdBcmOneMsg(cglue::canfd_bcm_one_msg);
+struct CanBcmHeader(cglue::bcm_msg_head);
 
 pub struct SockCanMsg {
     iface: i32,
@@ -827,6 +832,7 @@ impl SockCanHandle {
     }
 
     pub fn get_bcm_frame(&self) -> SockBcmMsg {
+
         #[allow(invalid_value)]
         let mut buffer: [u8; mem::size_of::<CanFdBcmOneMsg>()] =
             unsafe { MaybeUninit::uninit().assume_init() };
@@ -838,6 +844,9 @@ impl SockCanHandle {
         } else if info.count == mem::size_of::<CanFdBcmOneMsg>() as isize {
             let one_msg = unsafe { &*(&buffer as *const _ as *const CanFdBcmOneMsg) };
             CanAnyFrame::from(&one_msg.0.frame as *const _ as *const CanFdFrameRaw)
+        } else if info.count == mem::size_of::<CanBcmHeader>() as isize {
+            let header = unsafe { &*(&buffer as *const _ as *const CanBcmHeader) };
+            CanAnyFrame::None(header.0.can_id)
         } else {
             CanAnyFrame::Err(CanError::new("bcm-invalid-frame", cglue::get_perror()))
         };

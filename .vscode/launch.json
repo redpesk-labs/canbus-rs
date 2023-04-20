@@ -1,0 +1,96 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Native 'can-read'",
+            "type": "lldb",
+            "preLaunchTask": "sockcan-native-compile",
+            "request": "launch",
+            "program": "${env:CARGO_TARGET_DIR}debug/can-read",
+            "env": {
+                "LD_LIBRARY_PATH": "/usr/local/lib64"
+            },
+            "args": [
+            ],
+            "cwd": "${workspaceFolder}",
+            "initCommands": [
+                "target stop-hook add -n _start -o continue",
+                "settings set target.disable-aslr false"
+            ]
+        },
+        {
+            "name": "Native 'can-bmc'",
+            "type": "lldb",
+            "preLaunchTask": "sockcan-native-compile",
+            "request": "launch",
+            "program": "${env:CARGO_TARGET_DIR}debug/can-bmc",
+            "env": {
+                "LD_LIBRARY_PATH": "/usr/local/lib64"
+            },
+            "args": [
+            ],
+            "cwd": "${workspaceFolder}",
+            "initCommands": [
+                "target stop-hook add -n _start -o continue",
+                "settings set target.disable-aslr false"
+            ]
+        },
+        {
+            "name": "Native 'can-dbc'",
+            "type": "lldb",
+            "preLaunchTask": "sockcan-native-compile",
+            "request": "launch",
+            "program": "${env:CARGO_TARGET_DIR}debug/can-dbc",
+            "env": {
+                "LD_LIBRARY_PATH": "/usr/local/lib64"
+            },
+            "args": [
+                "examples/dbc-log/simple.dbc",
+                "/tmp/dbc-autogen.rs"
+            ],
+            "cwd": "${workspaceFolder}",
+            "initCommands": [
+                "target stop-hook add -n _start -o continue",
+                "settings set target.disable-aslr false"
+            ]
+        },
+        {
+            "name": "Native 'can-display'",
+            "type": "lldb",
+            "preLaunchTask": "sockcan-native-compile",
+            "request": "launch",
+            "program": "${env:CARGO_TARGET_DIR}debug/can-display",
+            "env": {
+                "LD_LIBRARY_PATH": "/usr/local/lib64"
+            },
+            "args": [
+            ],
+            "cwd": "${workspaceFolder}",
+            "initCommands": [
+                "target stop-hook add -n _start -o continue",
+                "settings set target.disable-aslr false"
+            ]
+        },
+        {
+            "name": "Native 'tap-test-auto'",
+            "type": "lldb",
+            "preLaunchTask": "test-native-compile",
+            "request": "launch",
+            "program": "afb-binder",
+            "env": {
+                "LD_LIBRARY_PATH": "/usr/local/lib64"
+            },
+            "args": [
+                "-vvv",
+                "--trap-faults=1",
+                "--config=examples/test/etc/binding-test-tap.json",
+            ],
+            "cwd": "${workspaceFolder}",
+            "initCommands": [
+                "target stop-hook add -n _start -o continue",
+                "settings set target.disable-aslr false",
+                "process handle -p true -s false -n true SIGVTALRM"
+            ]
+        },
+    ]
+}

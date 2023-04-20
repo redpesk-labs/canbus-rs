@@ -23,7 +23,7 @@ const IDT2: &str = "        ";
 const IDT3: &str = "            ";
 const IDT4: &str = "                ";
 const IDT5: &str = "                    ";
-
+const IDT6: &str = "                        ";
 pub struct DbcCodeGen {
     outfd: Option<File>,
     dbcfd: DbcObject,
@@ -267,7 +267,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
         code_output!(
             code,
             IDT2,
-            "fn update(&mut self, _stamp: u64, data: &[u8]) {"
+            "fn update(&mut self, frame: &CanMsgData) {"
         )?;
 
         let read_fn = match self.byte_order {
@@ -275,7 +275,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
                 let (start_bit, end_bit) = self.le_start_end_bit(msg)?;
 
                 format!(
-                    "data.view_bits::<Lsb0>()[{start}..{end}].load_le::<{typ}>()",
+                    "frame.data.view_bits::<Lsb0>()[{start}..{end}].load_le::<{typ}>()",
                     typ = self.get_data_usize(),
                     start = start_bit,
                     end = end_bit,
@@ -285,7 +285,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
                 let (start_bit, end_bit) = self.be_start_end_bit(msg)?;
 
                 format!(
-                    "data.view_bits::<Msb0>()[{start}..{end}].load_be::<{typ}>()",
+                    "frame.data.view_bits::<Msb0>()[{start}..{end}].load_be::<{typ}>()",
                     typ = self.get_data_usize(),
                     start = start_bit,
                     end = end_bit
@@ -293,40 +293,50 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
             }
         };
 
-        code_output!(code, IDT3, "let value = {};", read_fn)?;
+        code_output!(code, IDT3, "match frame.opcode {")?;
+        code_output!(code, IDT4, "CanBcmOpCode::RxChanged => {")?;
+        code_output!(code, IDT5, "let value = {};", read_fn)?;
 
         if self.value_type == ValueType::Signed {
             code_output!(
                 code,
-                IDT3,
+                IDT5,
                 "let value = {}::from_ne_bytes(value.to_ne_bytes());",
                 self.get_data_isize()
             )?;
         };
 
         if self.size == 1 {
-            code_output!(code, IDT3, "self.value= value == 1;")?;
+            code_output!(code, IDT5, "self.value= value == 1;")?;
         } else if self.offset != 0.0 || self.factor != 1.0 {
             // Scaling is always done on floats
-            code_output!(code, IDT3, "let factor = {}_f64;", self.factor)?;
-            code_output!(code, IDT3, "let offset = {}_f64;", self.offset)?;
-            code_output!(code, IDT3, "let newval= (value as f64) * factor + offset;")?;
-            code_output!(code, IDT3, "if newval != self.value {")?;
-            code_output!(code, IDT4, "self.value= newval;")?;
-            code_output!(code, IDT4, "self.status= CanDataStatus::Updated;")?;
-            code_output!(code, IDT4, "self.stamp= _stamp;")?;
-            code_output!(code, IDT3, "} else {")?;
-            code_output!(code, IDT4, "self.status= CanDataStatus::Unchanged;")?;
-            code_output!(code, IDT3, "}")?;
+            code_output!(code, IDT5, "let factor = {}_f64;", self.factor)?;
+            code_output!(code, IDT5, "let offset = {}_f64;", self.offset)?;
+            code_output!(code, IDT5, "let newval= (value as f64) * factor + offset;")?;
+            code_output!(code, IDT5, "if newval != self.value {")?;
+            code_output!(code, IDT6, "self.value= newval;")?;
+            code_output!(code, IDT6, "self.status= CanDataStatus::Updated;")?;
+            code_output!(code, IDT6, "self.stamp= frame.stamp;")?;
+            code_output!(code, IDT5, "} else {")?;
+            code_output!(code, IDT6, "self.status= CanDataStatus::Unchanged;")?;
+            code_output!(code, IDT5, "}")?;
         } else {
-            code_output!(code, IDT3, "if self.value != value {")?;
-            code_output!(code, IDT4, "self.value= value;")?;
-            code_output!(code, IDT4, "self.status= CanDataStatus::Updated;")?;
-            code_output!(code, IDT4, "self.stamp= _stamp;")?;
-            code_output!(code, IDT3, "} else {")?;
-            code_output!(code, IDT4, "self.status= CanDataStatus::Unchanged;")?;
-            code_output!(code, IDT3, "}")?;
+            code_output!(code, IDT5, "if self.value != value {")?;
+            code_output!(code, IDT6, "self.value= value;")?;
+            code_output!(code, IDT6, "self.status= CanDataStatus::Updated;")?;
+            code_output!(code, IDT6, "self.stamp= frame.stamp;")?;
+            code_output!(code, IDT5, "} else {")?;
+            code_output!(code, IDT6, "self.status= CanDataStatus::Unchanged;")?;
+            code_output!(code, IDT5, "}")?;
         }
+        code_output!(code, IDT4, "},")?;
+        code_output!(code, IDT4, "CanBcmOpCode::RxTimeout => {")?;
+        code_output!(code, IDT5, "self.status=CanDataStatus::Timeout")?;
+        code_output!(code, IDT4, "},")?;
+        code_output!(code, IDT4, "_ => {")?;
+        code_output!(code, IDT5, "self.status=CanDataStatus::Error")?;
+        code_output!(code, IDT4, "},")?;
+        code_output!(code, IDT3, "}")?;
         code_output!(code, IDT2, "}\n")?;
 
         // signal set_value
@@ -868,7 +878,7 @@ impl MsgCodeGen<&DbcCodeGen> for Message {
             code_output!(
                 code,
                 IDT3,
-                "self.signals[{}].update(frame.stamp, frame.data);",
+                "self.signals[{}].update(frame);",
                 idx
             )?;
         }

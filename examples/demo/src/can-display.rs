@@ -61,7 +61,7 @@ fn main() -> Result<(), CanError> {
     for canid in pool.get_ids() {
         SockBcmCmd::new(
             CanBcmOpCode::RxSetup,
-            CanBcmFlag::RX_FILTER_ID | CanBcmFlag::SET_TIMER,
+            CanBcmFlag::RX_FILTER_ID | CanBcmFlag::SET_TIMER | CanBcmFlag::START_TIMER | CanBcmFlag::RX_ANNOUNCE_RESUME,
             canid,
         )
         .set_timers(rate, watchdog)
