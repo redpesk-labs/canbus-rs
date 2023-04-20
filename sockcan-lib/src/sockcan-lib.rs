@@ -13,10 +13,8 @@
 )]
 extern crate bitflags;
 
-#[cfg(feature = "with-serde")]
+#[cfg(feature = "serde")]
 extern crate serde;
-#[cfg(feature = "with-serde")]
-extern crate serde_derive;
 
 #[path = "./cglue-mod.rs"]
 mod cglue;

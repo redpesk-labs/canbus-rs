@@ -8,7 +8,6 @@
  */
 
 extern crate sockcan;
-
 use sockcan::prelude::*;
 
 fn main() -> Result<(), String> {

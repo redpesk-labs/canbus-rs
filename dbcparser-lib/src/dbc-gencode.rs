@@ -28,6 +28,7 @@ pub struct DbcCodeGen {
     outfd: Option<File>,
     dbcfd: DbcObject,
     range_check: bool,
+    serde_json: bool,
 }
 
 pub struct DbcParser {
@@ -35,6 +36,7 @@ pub struct DbcParser {
     infile: Option<String>,
     outfile: Option<String>,
     range_check: bool,
+    serde_json: bool,
     header: Option<&'static str>,
     whitelist: Option<Vec<u32>>,
     blacklist: Option<Vec<u32>>,
@@ -264,11 +266,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
         code_output!(code, IDT2, "}\n")?;
 
         //signal update
-        code_output!(
-            code,
-            IDT2,
-            "fn update(&mut self, frame: &CanMsgData) {"
-        )?;
+        code_output!(code, IDT2, "fn update(&mut self, frame: &CanMsgData) {")?;
 
         let read_fn = match self.byte_order {
             ByteOrder::LittleEndian => {
@@ -419,6 +417,9 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
                 msg.id.0,
                 self.name
             )?;
+            if code.serde_json {
+                code_output!(code, IDT1, "#[derive(Serialize, Deserialize)]")?;
+            }
             code_output!(code, IDT1, "pub enum Dbc{} {{", self.get_type_kamel())?;
             for variant in variants {
                 code_output!(code, IDT2, "{},", variant.get_type_kamel())?;
@@ -501,7 +502,9 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
         code_output!(code, IDT1, "/// - Offset: {}", self.offset)?;
         code_output!(code, IDT1, "/// - Byte order: {:?}", self.byte_order)?;
         code_output!(code, IDT1, "/// - Value type: {:?}", self.value_type)?;
-
+        if code.serde_json {
+            code_output!(code, IDT1, "#[derive(Serialize, Deserialize)]")?;
+        }
         code_output!(code, IDT1, "pub struct {} {{", self.get_type_kamel())?;
         //code_output!(code, IDT2, "uid: DbcSignal,")?;
         code_output!(code, IDT2, "status: CanDataStatus,")?;
@@ -763,7 +766,12 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
             IDT2,
             "fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {"
         )?;
-        code_output!(code, IDT3, "let text=format!(\"{}:{{}}\", self.get_typed_value());", self.get_type_kamel())?;
+        code_output!(
+            code,
+            IDT3,
+            "let text=format!(\"{}:{{}}\", self.get_typed_value());",
+            self.get_type_kamel()
+        )?;
         code_output!(code, IDT3, "fmt.pad(&text)")?;
         code_output!(code, IDT2, "}")?;
         code_output!(code, IDT1, "}\n")?;
@@ -780,7 +788,12 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
             IDT2,
             "fn fmt(&self, format: &mut fmt::Formatter<'_>) -> fmt::Result {"
         )?;
-        code_output!(code, IDT3, "format.debug_struct(\"{}\")", self.get_type_kamel())?;
+        code_output!(
+            code,
+            IDT3,
+            "format.debug_struct(\"{}\")",
+            self.get_type_kamel()
+        )?;
 
         code_output!(code, IDT4, ".field(\"val\", &self.get_typed_value())")?;
         code_output!(code, IDT4, ".field(\"stamp\", &self.get_stamp())")?;
@@ -875,12 +888,7 @@ impl MsgCodeGen<&DbcCodeGen> for Message {
         code_output!(code, IDT3, "self.stamp= frame.stamp;")?;
         code_output!(code, IDT3, "self.status= frame.opcode;")?;
         for idx in 0..self.signals.len() {
-            code_output!(
-                code,
-                IDT3,
-                "self.signals[{}].update(frame);",
-                idx
-            )?;
+            code_output!(code, IDT3, "self.signals[{}].update(frame);", idx)?;
         }
         code_output!(code, IDT2, "}\n")?;
 
@@ -953,6 +961,10 @@ impl MsgCodeGen<&DbcCodeGen> for Message {
         code_output!(code, IDT1, "use bitvec::prelude::*;")?;
         code_output!(code, IDT1, "use std::any::Any;\n")?;
         code_output!(code, IDT1, "use std::fmt;\n")?;
+        if code.serde_json {
+        code_output!(code, IDT1, "use serde::{Deserialize, Serialize};")?;
+        }
+
 
         // enumeration with all signal type
         code_output!(code, IDT1, "pub enum DbcSignal {")?;
@@ -1019,6 +1031,7 @@ impl DbcParser {
         DbcParser {
             uid: uid,
             range_check: true,
+            serde_json: true,
             infile: None,
             outfile: None,
             header: None,
@@ -1054,6 +1067,11 @@ impl DbcParser {
 
     pub fn range_check(&mut self, flag: bool) -> &mut Self {
         self.range_check = flag;
+        self
+    }
+
+    pub fn serde_json(&mut self, flag: bool) -> &mut Self {
+        self.serde_json = flag;
         self
     }
 
@@ -1111,6 +1129,7 @@ impl DbcParser {
             dbcfd: dbcfd,
             outfd: outfd,
             range_check: self.range_check,
+            serde_json: self.serde_json,
         };
 
         match self.header {
@@ -1171,6 +1190,9 @@ impl DbcParser {
         code_output!(code, IDT0, "#![allow(non_snake_case)]")?;
         code_output!(code, IDT0, "#![allow(dead_code)]")?;
         code_output!(code, IDT0, "use sockcan::prelude::*;")?;
+        if code.serde_json {
+            code_output!(code, IDT0, "extern crate serde;")?;
+        }
         code_output!(code, IDT0, "")?;
 
         // output messages/signals

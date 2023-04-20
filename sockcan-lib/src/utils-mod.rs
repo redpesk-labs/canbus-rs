@@ -8,12 +8,16 @@
 
 use std::fmt;
 use super::cglue;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
-
+#[cfg_attr(feature = "serde", derive(Serialize,Deserialize))]
 pub struct CanError {
     uid: String,
     info: String,
 }
+
+#[cfg_attr(feature = "serde", derive(Serialize,Deserialize))]
 #[derive(Copy, Clone, Debug)]
 pub enum CanBcmOpCode {
     TxSetup,

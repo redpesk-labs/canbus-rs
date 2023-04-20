@@ -9,6 +9,7 @@
 
 extern crate dbcparser;
 extern crate sockcan;
+extern crate serde;
 
 // include generated code and Rust module as declare in build.rs->DbcParser::new("DbcSimple")
 include!("/tmp/dbc-autogen.rs");

@@ -9,7 +9,12 @@ use std::fmt;
 use std::any::Any;
 use utils::*;
 
+
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CanDataStatus {
     Timeout,
     Updated,
