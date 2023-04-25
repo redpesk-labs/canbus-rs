@@ -5,10 +5,11 @@
  * Redpesk interface code/config use MIT License and can be freely copy/modified even within proprietary code
  * License: $RP_BEGIN_LICENSE$ SPDX:MIT https://opensource.org/licenses/MIT $RP_END_LICENSE$
 */
-use std::fmt;
 use std::any::Any;
-use utils::*;
-
+use std::cell::{RefCell, RefMut};
+use std::fmt;
+use std::rc::Rc;
+use crate::prelude::*;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -23,19 +24,20 @@ pub enum CanDataStatus {
     Unset,
 }
 
-impl  fmt::Display for CanDataStatus {
+impl fmt::Display for CanDataStatus {
     fn fmt(&self, format: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let status= match self {
+        let status = match self {
             CanDataStatus::Timeout => "Timeout",
             CanDataStatus::Updated => "Updated",
             CanDataStatus::Unchanged => "Unchanged",
             CanDataStatus::Error => "Error",
             CanDataStatus::Unset => "Unset",
         };
-        write! (format, "{}", status)
+        write!(format, "{}", status)
     }
 }
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CanDbcType {
     U8(u8),
     U16(u16),
@@ -49,9 +51,9 @@ pub enum CanDbcType {
     Bool(bool),
 }
 
-impl  fmt::Display for CanDbcType {
+impl fmt::Display for CanDbcType {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let text= match self {
+        let text = match self {
             CanDbcType::U8(val) => format!("{})", val),
             CanDbcType::U16(val) => format!("{}", val),
             CanDbcType::U32(val) => format!("{}", val),
@@ -68,8 +70,8 @@ impl  fmt::Display for CanDbcType {
 }
 
 impl fmt::Debug for CanDbcType {
-        fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let text= match self {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let text = match self {
             CanDbcType::U8(val) => format!("{:<8}  (u8)", val),
             CanDbcType::U16(val) => format!("{:<8} (u16)", val),
             CanDbcType::U32(val) => format!("{:<8} (u32)", val),
@@ -81,9 +83,8 @@ impl fmt::Debug for CanDbcType {
             CanDbcType::Bool(val) => format!("{:<8}(bool)", val),
             CanDbcType::F64(val) => format!("{:<8.3} (f64)", val),
         };
-            fmt.debug_struct(&text)
-            .finish()
-        }
+        fmt.debug_struct(&text).finish()
+    }
 }
 pub trait FromCanDbcType<T> {
     fn convert(value: &CanDbcType) -> Result<T, ()>;
@@ -91,16 +92,19 @@ pub trait FromCanDbcType<T> {
 
 impl CanDbcType {
     pub fn cast<T>(&self) -> Result<T, CanError>
-    where CanDbcType: FromCanDbcType<T> {
+    where
+        CanDbcType: FromCanDbcType<T>,
+    {
         match Self::convert(self) {
             Ok(val) => Ok(val),
-            Err(()) => Err(CanError::new ("invalid-type-cast","requested type is invalid")),
-
+            Err(()) => Err(CanError::new(
+                "invalid-type-cast",
+                "requested type is invalid",
+            )),
         }
     }
 }
 
-pub use to_can_type;
 #[macro_export]
 macro_rules! to_can_type {
     ($src:ty, $dst:tt) => {
@@ -139,21 +143,28 @@ pub trait CanDbcSignal {
     fn get_status(&self) -> CanDataStatus;
     fn update(&mut self, frame: &CanMsgData);
     fn as_any(&mut self) -> &mut dyn Any;
+    fn to_json(&self) -> String;
+}
+
+pub trait CanMsgCtx {
+    fn msg_notification (&self, msg: &dyn CanDbcMessage);
 }
 
 pub trait CanDbcMessage {
     fn get_id(&self) -> u32;
-    fn update(&mut self, data: &CanMsgData);
+    fn update(&mut self, data: &CanMsgData) -> Result<(), CanError>;
     fn get_stamp(&self) -> u64;
     fn get_status(&self) -> CanBcmOpCode;
     fn get_name(&self) -> &'static str;
-    fn get_signals(&mut self) -> &mut [Box<dyn CanDbcSignal>];
+    fn get_signals(&self) -> &[Rc<RefCell<Box<dyn CanDbcSignal>>>];
     fn as_any(&mut self) -> &mut dyn Any;
+    fn set_callback (&mut self, callback: Box<dyn CanMsgCtx>);
 }
 
 pub trait CanDbcPool {
-    fn new(uid: &'static str) -> Self;
-    fn get_ids(&self) -> &'static [u32];
-    fn get_messages(&mut self) -> &mut [Box<dyn CanDbcMessage>];
-    fn update(&self, data: &CanMsgData) -> Result<&mut dyn CanDbcMessage, CanError>;
+    //fn new(uid: &'static str) -> Self;
+    fn get_ids(&self) -> &[u32];
+    fn get_messages(&self) -> &[Rc<RefCell<Box<dyn CanDbcMessage>>>];
+    fn get_mut(&self, canid: u32) -> Result<RefMut<'_, Box<dyn CanDbcMessage>>, CanError>;
+    fn update(&self, data: &CanMsgData) -> Result<RefMut<'_, Box<dyn CanDbcMessage>>, CanError>;
 }

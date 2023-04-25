@@ -7,7 +7,6 @@
  *
  */
 
-extern crate dbcparser;
 extern crate sockcan;
 extern crate serde;
 
@@ -56,14 +55,14 @@ fn main() -> Result<(), CanError> {
     let sock = SockCanHandle::open_bcm(candev, CanTimeStamp::CLASSIC)?;
 
     // get canid list from dbc pool
-    let mut pool = CanMsgPool::new("dbc-demo");
+    let pool = CanMsgPool::new("dbc-demo");
 
     // register dbc defined canid
     for canid in pool.get_ids() {
         SockBcmCmd::new(
             CanBcmOpCode::RxSetup,
             CanBcmFlag::RX_FILTER_ID | CanBcmFlag::SET_TIMER | CanBcmFlag::START_TIMER | CanBcmFlag::RX_ANNOUNCE_RESUME,
-            canid,
+            *canid,
         )
         .set_timers(rate, watchdog)
         .apply(&sock)?;
@@ -94,18 +93,27 @@ fn main() -> Result<(), CanError> {
         );
 
         // loop on message signal and display values.
-        for signal in msg.get_signals() {
+        for sig_rfc in msg.get_signals() {
+            let signal= sig_rfc.borrow();
             let stamp = signal.get_stamp();
             let mut sig_age_ms=0;
+
+            let json= if cfg!(feature= "serde") {
+                signal.to_json()
+            } else {
+                "serde-disable".to_owned()
+            };
+
             if stamp > 0 {
                 sig_age_ms = (msg_data.stamp - signal.get_stamp()) / 1000;
             }
             println!(
-                "  -- {:25} value:{:?} status:{:?} age:{} ",
+                "  -- {:25} value:{:?} status:{:?} age:{} json:{}",
                 signal.get_name(),
                 signal.get_value(),
                 signal.get_status(),
                 sig_age_ms,
+                json,
             );
         }
     }

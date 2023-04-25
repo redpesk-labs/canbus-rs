@@ -2,10 +2,11 @@
 name = "lib_dbcparser"
 authors = ["fulup@iot.bzh"]
 version = "0.1.0"
+#edition = "2021"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { version = "1"}
 nom = { version = "7.1", features = ["alloc"] }
 derive-getters = "0.2"
 heck = "0.4"
@@ -16,6 +17,3 @@ lib_sockcan= {path ="../sockcan-lib"}
 name = "dbcparser"
 crate-type = ["lib"]
 path = "src/dbc-lib.rs"
-
-#[features]
-#with-serde = ["serde", "serde_derive"]

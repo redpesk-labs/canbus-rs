@@ -7,9 +7,9 @@ edition = "2021"
 bitvec = { version = "1.0", default-features = false }
 lib_sockcan= {path ="../../sockcan-lib"}
 lib_dbcparser= {path ="../../dbcparser-lib"}
-bitflags = "1"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+bitflags = { version = "2"}
+serde = { version = "1.0", features = ["derive"], optional = true }
+serde_json={ version= "1.0", optional = true }
 
 [build-dependencies]
 lib_dbcparser= {path ="../../dbcparser-lib"}
@@ -29,3 +29,6 @@ path = "src/parse_dbc.rs"
 [[bin]]
 name = "can-display"
 path = "src/can-display.rs"
+
+[features]
+default = ["serde","serde_json"]

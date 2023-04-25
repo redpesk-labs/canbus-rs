@@ -15,7 +15,7 @@ use std::ffi::CStr;
 
 use super::cglue;
 use std::mem::{self, MaybeUninit};
-use utils::*;
+use crate::prelude::*;
 
 type SockCanId = cglue::canid_t;
 bitflags! {

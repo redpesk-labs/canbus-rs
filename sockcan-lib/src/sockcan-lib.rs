@@ -29,7 +29,7 @@ mod socket;
 mod dbcpool;
 
 pub mod prelude {
-    pub use socket::*;
-    pub use utils::*;
-    pub use dbcpool::*;
+    pub use crate::socket::*;
+    pub use crate::utils::*;
+    pub use crate::dbcpool::*;
 }
