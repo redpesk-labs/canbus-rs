@@ -14,8 +14,8 @@ use bitflags::bitflags;
 use std::ffi::CStr;
 
 use super::cglue;
-use std::mem::{self, MaybeUninit};
 use crate::prelude::*;
+use std::mem::{self, MaybeUninit};
 
 type SockCanId = cglue::canid_t;
 bitflags! {
@@ -49,8 +49,8 @@ bitflags! {
 bitflags! {
     #[derive(PartialEq, Eq, Debug)]
     pub struct CanBcmFlag: u32 {
-        const SET_TIMER          = cglue::can_BCM_FLAG_x_SETTIMER;
-        const START_TIMER        = cglue::can_BCM_FLAG_x_STARTTIMER;
+        const SET_TIMER         = cglue::can_BCM_FLAG_x_SETTIMER;
+        const START_TIMER       = cglue::can_BCM_FLAG_x_STARTTIMER;
         const TX_COUNTEVT       = cglue::can_BCM_FLAG_x_TX_COUNTEVT;
         const TX_ANNOUNCE       = cglue::can_BCM_FLAG_x_TX_ANNOUNCE;
         const TX_CP_CAN_ID      = cglue::can_BCM_FLAG_x_TX_CP_CAN_ID;
@@ -61,6 +61,7 @@ bitflags! {
         const TX_RESET_MULTI_IDX= cglue::can_BCM_FLAG_x_TX_RESET_MULTI_IDX;
         const RX_RTR_FRAME      = cglue::can_BCM_FLAG_x_RX_RTR_FRAME;
         const FD_FRAME          = cglue::can_BCM_FLAG_x_FD_FRAME;
+        const NONE =0;
     }
 }
 impl CanBcmFlag {
@@ -441,7 +442,6 @@ impl CanIFaceFrom<u32> for SockCanHandle {
 }
 
 impl SockCanHandle {
-
     pub fn open_raw<T>(candev: T, timestamp: CanTimeStamp) -> Result<Self, CanError>
     where
         SockCanHandle: CanIFaceFrom<T>,
@@ -546,12 +546,12 @@ impl SockCanHandle {
         Ok(sockcan)
     }
 
-    pub fn close (&self) {
-       unsafe {cglue::close(self.sockfd)};
+    pub fn close(&self) {
+        unsafe { cglue::close(self.sockfd) };
     }
 
-    pub fn as_rawfd (&self) -> i32 {
-       self.sockfd
+    pub fn as_rawfd(&self) -> i32 {
+        self.sockfd
     }
 
     pub fn set_blocking(&mut self, blocking: bool) -> Result<&mut Self, CanError> {
@@ -832,7 +832,6 @@ impl SockCanHandle {
     }
 
     pub fn get_bcm_frame(&self) -> SockBcmMsg {
-
         #[allow(invalid_value)]
         let mut buffer: [u8; mem::size_of::<CanFdBcmOneMsg>()] =
             unsafe { MaybeUninit::uninit().assume_init() };
@@ -1111,6 +1110,15 @@ impl SockBcmCmd {
                         ));
                     };
                 }
+            },
+
+            CanBcmOpCode::RxDelete => {
+                if self.frames.len() != 0 {
+                    return Err(CanError::new(
+                        "invalid-socketcan-filter",
+                        "BCM:RxDelete does not accept frames",
+                    ));
+                };
             }
             _ => {
                 return Err(CanError::new(
