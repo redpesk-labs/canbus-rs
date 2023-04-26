@@ -5,14 +5,14 @@ edition = "2021"
 
 [dependencies]
 bitvec = { version = "1.0", default-features = false }
-lib_sockcan= {path ="../../sockcan-lib"}
-lib_dbcparser= {path ="../../dbcparser-lib"}
 bitflags = { version = "2"}
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json={ version= "1.0", optional = true }
+lib_sockcan= {path ="../../sockcan"}
+lib_dbcparser= {path ="../../dbcparser"}
 
 [build-dependencies]
-lib_dbcparser= {path ="../../dbcparser-lib"}
+lib_dbcparser= {path ="../../dbcparser"}
 
 [[bin]]
 name = "can-read"

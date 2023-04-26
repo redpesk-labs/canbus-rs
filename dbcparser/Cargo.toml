@@ -5,10 +5,9 @@ version = "0.1.0"
 #edition = "2021"
 
 [dependencies]
-nom = { version = "7.1", features = ["alloc"] }
+nom = { version = "7", features = ["alloc"] }
 heck = "0.4"
 lib_sockcan= {path ="../sockcan"}
-
 
 [lib]
 name = "dbcparser"
