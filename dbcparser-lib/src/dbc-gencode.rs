@@ -13,7 +13,7 @@
  */
 use data::*;
 use heck::*;
-use sockcan::prelude::*;
+use sockcan::prelude::get_time;
 use std::fs::File;
 use std::io::{self, Error, ErrorKind, Write};
 
@@ -134,7 +134,7 @@ impl Signal {
 
             let start_bit = x.checked_add(y)?;
             let end_bit = start_bit.checked_add(self.size)?;
-            let msg_bits = msg.size().checked_mul(8)?;
+            let msg_bits = msg.size.checked_mul(8)?;
             Some((start_bit, end_bit, msg_bits))
         };
 
@@ -498,12 +498,12 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
         }
         code_output!(code, IDT1, "/// - Min: {}", self.min)?;
         code_output!(code, IDT1, "/// - Max: {}", self.max)?;
-        code_output!(code, IDT1, "/// - Unit: {:?}", self.unit())?;
+        code_output!(code, IDT1, "/// - Unit: {:?}", self.unit)?;
         code_output!(
             code,
             IDT1,
             "/// - Receivers: {}",
-            self.receivers().join(", ")
+            self.receivers.join(", ")
         )?;
         code_output!(code, IDT1, "/// - Start bit: {}", self.start_bit)?;
         code_output!(code, IDT1, "/// - Signal size: {} bits")?;
@@ -705,7 +705,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
             )?;
         };
 
-        match self.byte_order() {
+        match self.byte_order {
             ByteOrder::LittleEndian => {
                 let (start_bit, end_bit) = self.le_start_end_bit(msg)?;
                 code_output!(
@@ -861,7 +861,7 @@ impl MsgCodeGen<&DbcCodeGen> for Message {
         code_output!(code, IDT4, "stamp: 0,")?;
         code_output!(code, IDT4, "callback: None,")?;
         code_output!(code, IDT4, "signals: [")?;
-        for signal in self.signals() {
+        for signal in &self.signals {
             code_output!(code, IDT5, "{}::new(),", signal.get_type_kamel())?;
         }
         code_output!(code, IDT4, "],")?;
@@ -1018,9 +1018,9 @@ impl MsgCodeGen<&DbcCodeGen> for Message {
     fn gen_code_message(&self, code: &DbcCodeGen) -> io::Result<()> {
         // message header
         code_output!(code, IDT0, "/// {} Message", self.name)?;
-        code_output!(code, IDT0, "/// - ID: {0} (0x{0:x})", self.id().0)?;
-        code_output!(code, IDT0, "/// - Size: {} bytes", self.size())?;
-        if let Transmitter::NodeName(transmitter) = self.transmitter() {
+        code_output!(code, IDT0, "/// - ID: {0} (0x{0:x})", self.id.0)?;
+        code_output!(code, IDT0, "/// - Size: {} bytes", self.size)?;
+        if let Transmitter::NodeName(transmitter) = &self.transmitter {
             code_output!(code, IDT0, "/// - Transmitter: {}", transmitter)?;
         }
         if let Some(comment) = code.dbcfd.message_comment(self.id) {
@@ -1049,13 +1049,13 @@ impl MsgCodeGen<&DbcCodeGen> for Message {
 
         // enumeration with all signal type
         code_output!(code, IDT1, "pub enum DbcSignal {")?;
-        for signal in self.signals() {
+        for signal in &self.signals {
             code_output!(code, IDT2, "{},", signal.get_type_kamel())?;
         }
         code_output!(code, IDT1, "}\n")?;
 
         // signals structures and implementation
-        for signal in self.signals() {
+        for signal in &self.signals {
             signal.gen_code_signal(code, self)?;
         }
 
@@ -1280,14 +1280,14 @@ impl DbcParser {
         code_output!(code, IDT0, "")?;
 
         // output messages/signals
-        for message in code.dbcfd.messages() {
+        for message in &code.dbcfd.messages {
             message.gen_code_message(&code)?;
         }
 
         // enumeration with all signal type
         code_output!(code, IDT0, "enum DbcMessages {")?;
-        for msg in code.dbcfd.messages() {
-            code_output!(code, IDT1, "{},", msg.get_type_kamel())?;
+        for message in &code.dbcfd.messages {
+            code_output!(code, IDT1, "{},", message.get_type_kamel())?;
         }
         code_output!(code, IDT0, "}\n")?;
 
@@ -1297,7 +1297,7 @@ impl DbcParser {
             code,
             IDT1,
             "pool: [Rc<RefCell<Box<dyn CanDbcMessage>>>;{}],",
-            code.dbcfd.messages.len()
+            &code.dbcfd.messages.len()
         )?;
         code_output!(code, IDT0, "}\n")?;
 
@@ -1306,7 +1306,7 @@ impl DbcParser {
         // extract canid from messages vector
         let canids: Vec<u32> = code
             .dbcfd
-            .messages()
+            .messages
             .iter()
             .filter_map(|msg| Some(msg.id.to_u32()))
             .collect();
