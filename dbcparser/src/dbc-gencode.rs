@@ -24,6 +24,7 @@ const IDT3: &str = "            ";
 const IDT4: &str = "                ";
 const IDT5: &str = "                    ";
 const IDT6: &str = "                        ";
+//const IDT7: &str = "                            ";
 pub struct DbcCodeGen {
     outfd: Option<File>,
     dbcfd: DbcObject,
@@ -266,7 +267,11 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
         code_output!(code, IDT2, "}\n")?;
 
         //signal update
-        code_output!(code, IDT2, "fn update(&mut self, frame: &CanMsgData) {")?;
+        code_output!(
+            code,
+            IDT2,
+            "fn update(&mut self, frame: &CanMsgData) -> i32 {"
+        )?;
 
         let read_fn = match self.byte_order {
             ByteOrder::LittleEndian => {
@@ -329,11 +334,25 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
         }
         code_output!(code, IDT4, "},")?;
         code_output!(code, IDT4, "CanBcmOpCode::RxTimeout => {")?;
-        code_output!(code, IDT5, "self.status=CanDataStatus::Timeout")?;
+        code_output!(code, IDT5, "self.status=CanDataStatus::Timeout;")?;
         code_output!(code, IDT4, "},")?;
         code_output!(code, IDT4, "_ => {")?;
-        code_output!(code, IDT5, "self.status=CanDataStatus::Error")?;
+        code_output!(code, IDT5, "self.status=CanDataStatus::Error;")?;
         code_output!(code, IDT4, "},")?;
+        code_output!(code, IDT3, "}")?;
+
+        code_output!(code, IDT3, "match &self.callback {")?;
+        code_output!(code, IDT4, "None => 0,")?;
+        code_output!(code, IDT4, "Some(callback) => {")?;
+        code_output!(code, IDT5, "match callback.try_borrow() {")?;
+        code_output!(
+            code,
+            IDT6,
+            "Err(_) => {println!(\"fail to get signal callback reference\"); -1},"
+        )?;
+        code_output!(code, IDT6, "Ok(cb_ref) => cb_ref.sig_notification(self),")?;
+        code_output!(code, IDT5, "}")?;
+        code_output!(code, IDT4, "}")?;
         code_output!(code, IDT3, "}")?;
         code_output!(code, IDT2, "}\n")?;
 
@@ -354,7 +373,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
         code_output!(code, IDT3, "};")?;
 
         code_output!(code, IDT3, "self.set_typed_value(value, data)")?;
-        code_output!(code, IDT2, "}")?;
+        code_output!(code, IDT2, "}\n")?;
 
         // signal get value
         code_output!(code, IDT2, "fn get_value(&self) -> CanDbcType {")?;
@@ -364,7 +383,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
             "CanDbcType::{}(self.get_typed_value())",
             self.get_data_type().to_upper_camel_case()
         )?;
-        code_output!(code, IDT2, "}")?;
+        code_output!(code, IDT2, "}\n")?;
 
         if code.serde_json {
             code_output!(code, IDT2, "fn to_json(&self) -> String {")?;
@@ -372,8 +391,24 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
             code_output!(code, IDT4, "Ok(json)=> json,",)?;
             code_output!(code, IDT4, "_ => \"serde-json-error\".to_owned()",)?;
             code_output!(code, IDT3, "}")?;
-            code_output!(code, IDT2, "}")?;
+            code_output!(code, IDT2, "}\n")?;
         }
+
+        // reset signal values
+        code_output!(code, IDT2, "fn reset(&mut self) {")?;
+        code_output!(code, IDT3, "self.stamp=0;")?;
+        code_output!(code, IDT3, "self.reset_value();")?;
+        code_output!(code, IDT3, "self.status=CanDataStatus::Unset;")?;
+        code_output!(code, IDT2, "}\n")?;
+
+        // set signal notification callback
+        code_output!(
+            code,
+            IDT2,
+            "fn set_callback(&mut self, callback: Box<dyn CanSigCtrl>)  {"
+        )?;
+        code_output!(code, IDT3, "self.callback= Some(RefCell::new(callback));")?;
+        code_output!(code, IDT2, "}\n")?;
 
         code_output!(
             code,
@@ -499,14 +534,9 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
         code_output!(code, IDT1, "/// - Min: {}", self.min)?;
         code_output!(code, IDT1, "/// - Max: {}", self.max)?;
         code_output!(code, IDT1, "/// - Unit: {:?}", self.unit)?;
-        code_output!(
-            code,
-            IDT1,
-            "/// - Receivers: {}",
-            self.receivers.join(", ")
-        )?;
+        code_output!(code, IDT1, "/// - Receivers: {}", self.receivers.join(", "))?;
         code_output!(code, IDT1, "/// - Start bit: {}", self.start_bit)?;
-        code_output!(code, IDT1, "/// - Signal size: {} bits")?;
+        code_output!(code, IDT1, "/// - Signal size: {} bits", self.size)?;
         code_output!(code, IDT1, "/// - Factor: {}", self.factor)?;
         code_output!(code, IDT1, "/// - Offset: {}", self.offset)?;
         code_output!(code, IDT1, "/// - Byte order: {:?}", self.byte_order)?;
@@ -515,7 +545,14 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
             code_output!(code, IDT1, "#[derive(Serialize, Deserialize)]")?;
         }
         code_output!(code, IDT1, "pub struct {} {{", self.get_type_kamel())?;
-        //code_output!(code, IDT2, "uid: DbcSignal,")?;
+        if code.serde_json {
+            code_output!(code, IDT2, "#[serde(skip)]")?;
+        }
+        code_output!(
+            code,
+            IDT2,
+            "callback: Option<RefCell<Box<dyn CanSigCtrl>>>,"
+        )?;
         code_output!(code, IDT2, "status: CanDataStatus,")?;
         code_output!(code, IDT2, "name: &'static str,")?;
         code_output!(code, IDT2, "stamp: u64,")?;
@@ -546,8 +583,18 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
             code_output!(code, IDT4, "value: false,")?;
         }
         code_output!(code, IDT4, "stamp: 0,")?;
+        code_output!(code, IDT4, "callback: None,")?;
         code_output!(code, IDT3, "})))")?;
         code_output!(code, IDT2, "}\n")?;
+
+        code_output!(code, IDT2, "fn reset_value(&mut self) {")?;
+        if self.size != 1 {
+            code_output!(code, IDT3, "self.value= 0_{};", self.get_data_type())?;
+        } else {
+            code_output!(code, IDT3, "self.value= false;")?;
+        }
+        code_output!(code, IDT2, "}\n")?;
+
 
         if let Some(variants) = code
             .dbcfd
@@ -833,7 +880,11 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
 impl MsgCodeGen<&DbcCodeGen> for Message {
     fn gen_can_dbc_impl(&self, code: &DbcCodeGen) -> io::Result<()> {
         code_output!(code, IDT1, "pub struct DbcMessage {")?;
-        code_output!(code, IDT2, "callback: Option<RefCell<Box<dyn CanMsgCtx>>>,")?;
+        code_output!(
+            code,
+            IDT2,
+            "callback: Option<RefCell<Box<dyn CanMsgCtrl>>>,"
+        )?;
         code_output!(
             code,
             IDT2,
@@ -842,6 +893,7 @@ impl MsgCodeGen<&DbcCodeGen> for Message {
         )?;
         code_output!(code, IDT2, "name: &'static str,")?;
         code_output!(code, IDT2, "status: CanBcmOpCode,")?;
+        code_output!(code, IDT2, "listeners: i32,")?;
         code_output!(code, IDT2, "stamp: u64,")?;
         code_output!(code, IDT2, "id: u32,")?;
         code_output!(code, IDT1, "}\n")?;
@@ -858,6 +910,7 @@ impl MsgCodeGen<&DbcCodeGen> for Message {
         code_output!(code, IDT4, "id: {},", self.id.to_u32())?;
         code_output!(code, IDT4, "name: \"{}\",", self.get_type_kamel())?;
         code_output!(code, IDT4, "status: CanBcmOpCode::Unknown,")?;
+        code_output!(code, IDT4, "listeners: 0,")?;
         code_output!(code, IDT4, "stamp: 0,")?;
         code_output!(code, IDT4, "callback: None,")?;
         code_output!(code, IDT4, "signals: [")?;
@@ -880,6 +933,7 @@ impl MsgCodeGen<&DbcCodeGen> for Message {
                 ))
             })
             .collect();
+
         code_output!(
             code,
             IDT2,
@@ -922,6 +976,30 @@ impl MsgCodeGen<&DbcCodeGen> for Message {
     fn gen_can_dbc_message(&self, code: &DbcCodeGen) -> io::Result<()> {
         // build message signal:type list
         code_output!(code, IDT1, "impl CanDbcMessage for DbcMessage {")?;
+        code_output!(code, IDT2, "fn reset(&mut self) -> Result<(), CanError> {")?;
+        code_output!(code, IDT3, "self.status=CanBcmOpCode::Unknown;")?;
+        code_output!(code, IDT3, "self.stamp=0;")?;
+        for idx in 0..self.signals.len() {
+            code_output!(
+                code,
+                IDT3,
+                "match Rc::clone (&self.signals[{}]).try_borrow_mut() {{",
+                idx
+            )?;
+
+            code_output!(code, IDT4, "Ok(mut signal) => signal.reset(),",)?;
+            code_output!(
+                code,
+                IDT4,
+                "Err(_) => return Err(CanError::new(\"signal-reset-fail\",\"Internal error {}:{}\")),",
+                self.signals[idx].get_type_snake(),
+                self.signals[idx].get_data_type().to_upper_camel_case()
+            )?;
+
+            code_output!(code, IDT3, "}")?;
+        }
+        code_output!(code, IDT2, "Ok(())")?;
+        code_output!(code, IDT1, "}\n")?;
 
         // update raw message value, then signals
         code_output!(
@@ -931,6 +1009,7 @@ impl MsgCodeGen<&DbcCodeGen> for Message {
         )?;
         code_output!(code, IDT3, "self.stamp= frame.stamp;")?;
         code_output!(code, IDT3, "self.status= frame.opcode;")?;
+        code_output!(code, IDT3, "self.listeners= 0;")?;
         for idx in 0..self.signals.len() {
             code_output!(
                 code,
@@ -939,7 +1018,11 @@ impl MsgCodeGen<&DbcCodeGen> for Message {
                 idx
             )?;
 
-            code_output!(code, IDT4, "Ok(mut signal) => signal.update(frame),",)?;
+            code_output!(
+                code,
+                IDT4,
+                "Ok(mut signal) => self.listeners += signal.update(frame),",
+            )?;
             code_output!(
                 code,
                 IDT4,
@@ -954,7 +1037,11 @@ impl MsgCodeGen<&DbcCodeGen> for Message {
         code_output!(code, IDT4, "None => {},")?;
         code_output!(code, IDT4, "Some(callback) => {")?;
         code_output!(code, IDT5, "match callback.try_borrow() {")?;
-        code_output!(code, IDT6, "Err(_) => println!(\"fail to get message callback reference\"),")?;
+        code_output!(
+            code,
+            IDT6,
+            "Err(_) => println!(\"fail to get message callback reference\"),"
+        )?;
         code_output!(code, IDT6, "Ok(cb_ref) => cb_ref.msg_notification(self),")?;
         code_output!(code, IDT5, "}")?;
         code_output!(code, IDT4, "}")?;
@@ -972,11 +1059,16 @@ impl MsgCodeGen<&DbcCodeGen> for Message {
         code_output!(code, IDT3, "&self.signals")?;
         code_output!(code, IDT2, "}\n")?;
 
+        // get message active signals listeners
+        code_output!(code, IDT2, "fn get_listeners(&self) -> i32 {")?;
+        code_output!(code, IDT3, "self.listeners")?;
+        code_output!(code, IDT2, "}\n")?;
+
         // set message notification callback
         code_output!(
             code,
             IDT2,
-            "fn set_callback(&mut self, callback: Box<dyn CanMsgCtx>)  {"
+            "fn set_callback(&mut self, callback: Box<dyn CanMsgCtrl>)  {"
         )?;
         code_output!(code, IDT3, "self.callback= Some(RefCell::new(callback));")?;
         code_output!(code, IDT2, "}\n")?;

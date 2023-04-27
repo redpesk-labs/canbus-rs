@@ -14,7 +14,7 @@ use crate::prelude::*;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CanDataStatus {
     Timeout,
@@ -135,18 +135,23 @@ to_can_type!(i64, I64);
 to_can_type!(bool, Bool);
 to_can_type!(f64, F64);
 
+pub trait CanSigCtrl {
+    fn sig_notification (&self, sig: &dyn CanDbcSignal) -> i32;
+}
 pub trait CanDbcSignal {
     fn get_value(&self) -> CanDbcType;
     fn set_value(&mut self, value: CanDbcType, data: &mut [u8]) -> Result<(), CanError>;
     fn get_name(&self) -> &'static str;
     fn get_stamp(&self) -> u64;
     fn get_status(&self) -> CanDataStatus;
-    fn update(&mut self, frame: &CanMsgData);
+    fn update(&mut self, frame: &CanMsgData) -> i32;
     fn as_any(&mut self) -> &mut dyn Any;
     fn to_json(&self) -> String;
+    fn reset(&mut self);
+    fn set_callback (&mut self, callback: Box<dyn CanSigCtrl>);
 }
 
-pub trait CanMsgCtx {
+pub trait CanMsgCtrl {
     fn msg_notification (&self, msg: &dyn CanDbcMessage);
 }
 
@@ -158,7 +163,9 @@ pub trait CanDbcMessage {
     fn get_name(&self) -> &'static str;
     fn get_signals(&self) -> &[Rc<RefCell<Box<dyn CanDbcSignal>>>];
     fn as_any(&mut self) -> &mut dyn Any;
-    fn set_callback (&mut self, callback: Box<dyn CanMsgCtx>);
+    fn reset(&mut self) -> Result <(), CanError>;
+    fn set_callback (&mut self, callback: Box<dyn CanMsgCtrl>);
+    fn get_listeners(&self) -> i32;
 }
 
 pub trait CanDbcPool {

@@ -38,7 +38,7 @@ fn main() {
         .header(header)
         .range_check(true)
         .whitelist(vec![280,614,599]) // restrict generated code size to candump.log messages
-        .blacklist(vec![614, 599])
+        //.blacklist(vec![614, 599])
         .generate()
         .expect("Fail to parse dbc-file'\n");
 }
