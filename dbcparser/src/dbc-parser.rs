@@ -1006,6 +1006,7 @@ pub fn dbc_from_str(dbc_str: &str) -> Result<DbcObject, DbcError> {
             match multispace0::<&str, ()>(remaining) {
                 Ok((ascii, _)) => {
                     if !ascii.is_empty() {
+                        println!("Unprocessed DBC: {}", ascii);
                         return Err(DbcError {
                             uid: "parsing-not-completed",
                             error: Error::Incomplete(remaining),

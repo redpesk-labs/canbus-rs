@@ -1,0 +1,22 @@
+{
+  "name": "afb-canbus",
+  "no-ldpaths": true,
+  "port": 1234,
+  "alias": ["/devtools:/usr/share/afb-ui-devtools/binder"],
+  "monitoring": true,
+
+  "binding": [
+    {
+        "uid": "sockcan-binding",
+        "path": "$HOME/.cargo/build/debug/libafb_sockcan.so",
+        "info": "RUST sockcan/DBC APIs"
+    }
+  ],
+
+  "set" : {
+    "low-can": {
+      "candev": "vcan0",
+      "dbcpath": "./examples/dbc/sample.dbc"
+    }
+  }
+}

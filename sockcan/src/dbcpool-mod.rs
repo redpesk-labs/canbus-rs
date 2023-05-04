@@ -72,16 +72,16 @@ impl fmt::Display for CanDbcType {
 impl fmt::Debug for CanDbcType {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         let text = match self {
-            CanDbcType::U8(val) => format!("{:<8}  (u8)", val),
-            CanDbcType::U16(val) => format!("{:<8} (u16)", val),
-            CanDbcType::U32(val) => format!("{:<8} (u32)", val),
-            CanDbcType::U64(val) => format!("{:<8} (u64)", val),
-            CanDbcType::I8(val) => format!("{:<8}   (i8)", val),
-            CanDbcType::I16(val) => format!("{:<8} (i16)", val),
-            CanDbcType::I32(val) => format!("{:<8} (i32)", val),
-            CanDbcType::I64(val) => format!("{:<6} (i64)", val),
-            CanDbcType::Bool(val) => format!("{:<8}(bool)", val),
-            CanDbcType::F64(val) => format!("{:<8.3} (f64)", val),
+            CanDbcType::U8(val) => format!("{}(u8)", val),
+            CanDbcType::U16(val) => format!("{}(u16)", val),
+            CanDbcType::U32(val) => format!("{}(u32)", val),
+            CanDbcType::U64(val) => format!("{}(u64)", val),
+            CanDbcType::I8(val) => format!("{}(i8)", val),
+            CanDbcType::I16(val) => format!("{}(i16)", val),
+            CanDbcType::I32(val) => format!("{}(i32)", val),
+            CanDbcType::I64(val) => format!("{}(i64)", val),
+            CanDbcType::Bool(val) => format!("{}(bool)", val),
+            CanDbcType::F64(val) => format!("{}(f64)", val),
         };
         fmt.debug_struct(&text).finish()
     }

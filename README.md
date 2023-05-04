@@ -77,9 +77,9 @@ ip addr | grep "can"  ;# check interface is up
 
 * start virtual can injection
     * apt-get install can-utils;  dnf install can-utils; zypper install can-utils;
-    * canplayer vcan0=elmcan -v -I examples/dbc-log/candump.log -l i -g 1
+    * canplayer vcan0=elmcan -v -I examples/demo/etc/candump/model3.log -l i -g 10
 
-* start dnc-player
+* start can-display
 ```
 [fulup@fulup-laptop canbus-rs]$ ~/.cargo/build/debug/can-display vcan0 500
 (1) => CanID:280 opcode:RxChanged stamp:1681732233413819

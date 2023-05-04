@@ -1,5 +1,5 @@
 [package]
-name = "can-demo"
+name = "can-bms"
 version = "0.1.0"
 edition = "2021"
 
@@ -15,20 +15,8 @@ lib_dbcparser= {path ="../../dbcparser"}
 lib_dbcparser= {path ="../../dbcparser"}
 
 [[bin]]
-name = "can-read"
-path = "src/read-can.rs"
-
-[[bin]]
-name = "can-bmc"
-path = "src/read-bcm.rs"
-
-[[bin]]
-name = "can-dbc"
-path = "src/parse-dbc.rs"
-
-[[bin]]
-name = "can-display"
-path = "src/can-display.rs"
+name = "can-bms"
+path = "src/bms-display.rs"
 
 [features]
 default = ["serde","serde_json"]

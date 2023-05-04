@@ -11,7 +11,7 @@ extern crate sockcan;
 extern crate serde;
 
 // include generated code and Rust module as declare in build.rs->DbcParser::new("DbcSimple")
-include!("./__model3-dbcgen.rs");
+include!("./__bms-dbcgen.rs");
 use crate::DbcSimple::*;
 
 use sockcan::prelude::*;
@@ -108,7 +108,7 @@ fn main() -> Result<(), CanError> {
                 sig_age_ms = (msg_data.stamp - signal.get_stamp()) / 1000;
             }
             println!(
-                "  -- {:25} value:{:?} status:{:?} age:{} json:{}",
+                "  -- {} value:{:?} status:{:?} age:{}\n     json:{}",
                 signal.get_name(),
                 signal.get_value(),
                 signal.get_status(),

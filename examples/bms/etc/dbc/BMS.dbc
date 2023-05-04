@@ -1,0 +1,175 @@
+VERSION ""
+
+
+NS_ :
+	NS_DESC_
+	CM_
+	BA_DEF_
+	BA_
+	VAL_
+	CAT_DEF_
+	CAT_
+	FILTER
+	BA_DEF_DEF_
+	EV_DATA_
+	ENVVAR_DATA_
+	SGTYPE_
+	SGTYPE_VAL_
+	BA_DEF_SGTYPE_
+	BA_SGTYPE_
+	SIG_TYPE_REF_
+	VAL_TABLE_
+	SIG_GROUP_
+	SIG_VALTYPE_
+	SIGTYPE_VALTYPE_
+	BO_TX_BU_
+	BA_DEF_REL_
+	BA_REL_
+	BA_DEF_DEF_REL_
+	BU_SG_REL_
+	BU_EV_REL_
+	BU_BO_REL_
+	SG_MUL_VAL_
+
+BS_:
+
+BU_: PLC Sub Main
+
+
+BO_ 641 Main_Param_Bat: 8 Vector__XXX
+ SG_ BatFaultCode3 : 47|24@0+ (1,0) [0|16777215] "" Vector__XXX
+ SG_ ParamSafetyVer : 25|10@0+ (1,0) [0|1023] "" Vector__XXX
+ SG_ ParamFuncVer : 19|10@0+ (1,0) [0|1023] "" Vector__XXX
+ SG_ SWMinorVer : 13|10@0+ (1,0) [0|1023] "" Vector__XXX
+ SG_ SWMajorVer : 7|10@0+ (1,0) [0|1023] "" Vector__XXX
+
+BO_ 1313 Main_Diag_Mde2: 8 Vector__XXX
+ SG_ DiagCellIvldV : 7|16@0+ (1,0) [0|65535] "N/A" Vector__XXX
+ SG_ DiagCellIvldT : 23|16@0+ (1,0) [0|65535] "N/A" Vector__XXX
+ SG_ DiagBBarIvldT : 39|16@0+ (1,0) [0|65535] "N/A" Vector__XXX
+
+BO_ 1281 Main_Diag_Mde1: 8 Vector__XXX
+ SG_ DiagCellUNV : 23|16@0+ (1,0) [0|65535] "N/A" Vector__XXX
+ SG_ DiagCellOVV : 7|16@0+ (1,0) [0|65535] "N/A" Vector__XXX
+ SG_ DiagCellOVT : 39|16@0+ (1,0) [0|65535] "N/A" Vector__XXX
+ SG_ DiagBBarOVT : 55|16@0+ (1,0) [0|65535] "N/A" Vector__XXX
+
+BO_ 673 Main_Conf_Mod: 8 Main
+ SG_ ModConfSeries : 7|64@0+ (1,0) [0|0] "" Vector__XXX
+
+BO_ 705 Main_Conf_Bat: 8 Main
+ SG_ ModNumber : 15|5@0+ (1,0) [0|16] "" Vector__XXX
+ SG_ ModConfParallel : 7|5@0+ (1,0) [0|31] "" Vector__XXX
+ SG_ BMMSer : 23|28@0+ (1,0) [0|268435455] "" Vector__XXX
+ SG_ BatCapacity : 55|12@0+ (0.1,0) [0|400] "Ah" Vector__XXX
+
+BO_ 609 Main_FaultCode: 8 Main
+ SG_ CBOpenCounter2 : 63|8@0+ (1,0) [0|255] "" Vector__XXX
+ SG_ CBOpenCounter1 : 55|8@0+ (1,0) [0|255] "" Vector__XXX
+ SG_ BatSOH : 46|7@0+ (1,0) [0|100] "%" Vector__XXX
+ SG_ BatFaultCode2 : 39|9@0+ (1,0) [0|511] "" Vector__XXX
+ SG_ BatFaultCode1 : 7|32@0+ (1,0) [0|4294967295] "" Vector__XXX
+
+BO_ 577 Main_Temp: 8 Main
+ SG_ MedConnTemp : 47|8@0+ (1,-70) [-70|120] "�C" Vector__XXX
+ SG_ TotalDchgNrj : 55|16@0+ (1,0) [0|65535] "kWh" Vector__XXX
+ SG_ MinCellTemp : 7|8@0+ (1,-70) [-70|120] "�C" Vector__XXX
+ SG_ MaxConnTemp : 23|8@0+ (1,-70) [-70|120] "�C" Vector__XXX
+ SG_ MaxCellTemp : 15|8@0+ (1,-70) [-70|120] "�C" Vector__XXX
+ SG_ ExtTemp : 39|8@0+ (1,-70) [-70|120] "�C" Vector__XXX
+ SG_ BMMTemp : 31|8@0+ (1,-70) [-70|120] "�C" Vector__XXX
+
+BO_ 545 Main_Volt_Current: 8 Main
+ SG_ RemainingRunTime : 63|8@0+ (1,0) [0|255] "" Vector__XXX
+ SG_ MinCellVoltage : 39|13@0+ (1,0) [0|5000] "mV" Vector__XXX
+ SG_ MaxCellVoltage : 7|13@0+ (1,0) [0|5000] "mV" Vector__XXX
+ SG_ BatVoltage : 42|11@0+ (1,0) [0|1500] "V" Vector__XXX
+ SG_ BatSOC : 30|7@0+ (1,0) [0|100] "%" Vector__XXX
+ SG_ BatCurrent : 10|12@0+ (0.5,-750) [-750|750] "A" Vector__XXX
+
+BO_ 513 Main_Safety: 8 Main
+ SG_ ContactorDiagProg : 56|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ C4DiagOpn : 24|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ HVNStatus : 59|3@0+ (1,0) [0|7] "" Vector__XXX
+ SG_ SafetyMode2Rdcy : 41|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ SafetyMode1Rdcy : 42|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ CBDiagResultRdcy : 40|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ DischargeStopReq : 25|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ SafetyMode2 : 9|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ SafetyMode1 : 10|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ C3DiagStk : 43|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ C3DiagOpn : 44|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ PMD : 23|10@0+ (0.5,0) [0|500] "kW" Vector__XXX
+ SG_ IMD : 7|10@0+ (0.5,0) [0|500] "A" Vector__XXX
+ SG_ DischargeUnavailable : 45|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ PMR : 55|9@0+ (0.5,0) [0|250] "kW" Vector__XXX
+ SG_ IMR : 39|9@0+ (0.5,0) [0|250] "A" Vector__XXX
+ SG_ ChargeUnavailabe : 46|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ CBStatus : 26|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ CBDiagResult : 8|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ C5Status : 27|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ C5DiagStk : 60|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ C4Status : 28|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ C5DiagOpn : 61|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ C3Status : 29|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ C4DiagStk : 62|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ BatOpStatus : 13|3@0+ (1,0) [0|7] "" Vector__XXX
+
+BO_ 801 Sub_FaultCode: 8 Sub
+ SG_ SubParamSafetyVer : 37|10@0+ (1,0) [0|1023] "" Vector__XXX
+ SG_ SubBatFaultCode2 : 39|2@0+ (1,0) [0|3] "" Vector__XXX
+ SG_ SubSWMinorVer : 49|10@0+ (1,0) [0|1023] "" Vector__XXX
+ SG_ SubSWMajorVer : 43|10@0+ (1,0) [0|1023] "" Vector__XXX
+ SG_ SubBatFaultCode1 : 7|32@0+ (1,0) [0|4294967295] "" Vector__XXX
+
+BO_ 769 Sub_Safety: 2 Sub
+ SG_ SubSafetyMode2Rdcy : 11|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ SubSafetyMode1Rdcy : 14|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ SubCBDiagResultRdcy : 9|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ SubSafetyMode2 : 5|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ SubSafetyMode1 : 7|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ SubCBStatus : 0|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ SubCBDiagResult : 2|1@0+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 289 PLC_Sub: 3 PLC
+ SG_ Subsftymde1reset : 12|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ SubCBTripReqRdcy : 23|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ SubBreakerDiagReqRdcy : 8|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ SubBreakerDiagReq : 9|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ SubCBTripReq : 14|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ SubReset : 11|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ SubDayOfYear : 7|9@0+ (1,0) [0|366] "" Vector__XXX
+
+BO_ 257 PLC_Main: 5 PLC
+ SG_ diagack : 24|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ EnableCharging : 25|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ sftymde1reset : 27|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ CBTripReqRdcy : 29|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ BreakerDiagReqRdcy : 31|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ BreakerDiagReq : 17|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ CBTripReq : 7|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ DisconnectionReq : 20|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ ContactorDiagReq : 2|1@0+ (1,0) [0|1] "" Vector__XXX
+ SG_ ConnectionReq : 23|1@0+ (1,0) [0|7] "" Vector__XXX
+ SG_ DayOfYear : 0|9@0+ (1,0) [0|366] "" Vector__XXX
+ SG_ BMUReset : 4|1@0+ (1,0) [0|1] "" Vector__XXX
+
+
+
+BA_DEF_ BO_  "GenMsgCycleTime" INT 0 0;
+BA_DEF_ BO_  "GenMsgSendType" ENUM  "none","cyclic";
+BA_DEF_  "BusType" STRING ;
+BA_DEF_DEF_  "GenMsgCycleTime" 0;
+BA_DEF_DEF_  "GenMsgSendType" "cyclic";
+BA_DEF_DEF_  "BusType" "CAN";
+BA_ "GenMsgCycleTime" BO_ 1313 1000;
+BA_ "GenMsgCycleTime" BO_ 1281 1000;
+BA_ "GenMsgSendType" BO_ 673 0;
+BA_ "GenMsgSendType" BO_ 705 0;
+BA_ "GenMsgSendType" BO_ 609 0;
+BA_ "GenMsgCycleTime" BO_ 577 1000;
+BA_ "GenMsgCycleTime" BO_ 513 100;
+BA_ "GenMsgSendType" BO_ 801 0;
+BA_ "GenMsgCycleTime" BO_ 769 100;
+BA_ "GenMsgCycleTime" BO_ 289 1000;
+BA_ "GenMsgCycleTime" BO_ 257 1000;
