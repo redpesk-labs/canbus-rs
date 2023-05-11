@@ -5,6 +5,7 @@
  * Redpesk interface code/config use MIT License and can be freely copy/modified even within proprietary code
  * License: $RP_BEGIN_LICENSE$ SPDX:MIT https://opensource.org/licenses/MIT $RP_END_LICENSE$
  *
+ *  ref: https://github.com/commaai/opendbc
  */
 
 extern crate sockcan;

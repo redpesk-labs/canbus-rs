@@ -92,7 +92,11 @@ ip addr | grep "can"  ;# check interface is up
 ![can-display](docs/asset/can-display-demo.png)
 
 
-Fulup: faire un to_json pour les messages
+Fulup:
+
+- implementer isotp
+- parser les json N2K
+- n2k fast packet
 
 
 

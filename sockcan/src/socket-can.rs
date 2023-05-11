@@ -8,6 +8,7 @@
  * References:
  *    https://www.kernel.org/doc/html/latest/networking/can.html#broadcast-manager-protocol-sockets-sock-dgram
  *    https://www.kernel.org/doc/html/latest/networking/can.html#broadcast-manager-receive-filter-timers
+ *    https://docs.kernel.org/networking/j1939.html
  *
 */
 use bitflags::bitflags;
@@ -17,7 +18,7 @@ use super::cglue;
 use crate::prelude::*;
 use std::mem::{self, MaybeUninit};
 
-type SockCanId = cglue::canid_t;
+pub type SockCanId = cglue::canid_t;
 bitflags! {
     #[derive(PartialEq, Eq, Debug)]
     pub struct FilterMask: cglue::canid_t {
@@ -46,30 +47,6 @@ bitflags! {
     }
 }
 
-bitflags! {
-    #[derive(PartialEq, Eq, Debug)]
-    pub struct CanBcmFlag: u32 {
-        const SET_TIMER         = cglue::can_BCM_FLAG_x_SETTIMER;
-        const START_TIMER       = cglue::can_BCM_FLAG_x_STARTTIMER;
-        const TX_COUNTEVT       = cglue::can_BCM_FLAG_x_TX_COUNTEVT;
-        const TX_ANNOUNCE       = cglue::can_BCM_FLAG_x_TX_ANNOUNCE;
-        const TX_CP_CAN_ID      = cglue::can_BCM_FLAG_x_TX_CP_CAN_ID;
-        const RX_FILTER_ID      = cglue::can_BCM_FLAG_x_RX_FILTER_ID;
-        const RX_CHECK_DLC      = cglue::can_BCM_FLAG_x_RX_CHECK_DLC;
-        const RX_NO_AUTOTIMER   = cglue::can_BCM_FLAG_x_RX_NO_AUTOTIMER;
-        const RX_ANNOUNCE_RESUME= cglue::can_BCM_FLAG_x_RX_ANNOUNCE_RESUME;
-        const TX_RESET_MULTI_IDX= cglue::can_BCM_FLAG_x_TX_RESET_MULTI_IDX;
-        const RX_RTR_FRAME      = cglue::can_BCM_FLAG_x_RX_RTR_FRAME;
-        const FD_FRAME          = cglue::can_BCM_FLAG_x_FD_FRAME;
-        const NONE =0;
-    }
-}
-impl CanBcmFlag {
-    pub fn check(flags: CanBcmFlag, value: u32) -> bool {
-        flags.bits() & value != 0
-    }
-}
-
 #[derive(Debug)]
 pub enum CanTimeStamp {
     NONE,
@@ -77,50 +54,6 @@ pub enum CanTimeStamp {
     NANOSEC,
     HARDWARE,
     SOFTWARE,
-}
-
-impl CanBcmOpCode {
-    pub fn from(opcode: u32) -> Result<CanBcmOpCode, CanError> {
-        let ope = match opcode {
-            cglue::can_BCM_OPE_x_TX_SETUP => CanBcmOpCode::TxSetup,
-            cglue::can_BCM_OPE_x_TX_DELETE => CanBcmOpCode::TxDelete,
-            cglue::can_BCM_OPE_x_TX_READ => CanBcmOpCode::TxRead,
-            cglue::can_BCM_OPE_x_TX_SEND => CanBcmOpCode::TxSend,
-            cglue::can_BCM_OPE_x_TX_STATUS => CanBcmOpCode::TxStatus,
-            cglue::can_BCM_OPE_x_TX_EXPIRED => CanBcmOpCode::TxExpired,
-            cglue::can_BCM_OPE_x_RX_SETUP => CanBcmOpCode::RxSetup,
-            cglue::can_BCM_OPE_x_RX_DELETE => CanBcmOpCode::RxDelete,
-            cglue::can_BCM_OPE_x_RX_READ => CanBcmOpCode::RxRead,
-            cglue::can_BCM_OPE_x_RX_STATUS => CanBcmOpCode::RxStatus,
-            cglue::can_BCM_OPE_x_RX_TIMEOUT => CanBcmOpCode::RxTimeout,
-            cglue::can_BCM_OPE_x_RX_CHANGED => CanBcmOpCode::RxChanged,
-            _ => {
-                return Err(CanError::new(
-                    "invalid-bcm-opcode",
-                    format!("value={}", opcode),
-                ))
-            }
-        };
-        Ok(ope)
-    }
-
-    pub fn as_u32(opcode: &CanBcmOpCode) -> u32 {
-        match opcode {
-            CanBcmOpCode::TxSetup => cglue::can_BCM_OPE_x_TX_SETUP,
-            CanBcmOpCode::TxDelete => cglue::can_BCM_OPE_x_TX_DELETE,
-            CanBcmOpCode::TxRead => cglue::can_BCM_OPE_x_TX_READ,
-            CanBcmOpCode::TxSend => cglue::can_BCM_OPE_x_TX_SEND,
-            CanBcmOpCode::TxStatus => cglue::can_BCM_OPE_x_TX_STATUS,
-            CanBcmOpCode::TxExpired => cglue::can_BCM_OPE_x_TX_EXPIRED,
-            CanBcmOpCode::RxSetup => cglue::can_BCM_OPE_x_RX_SETUP,
-            CanBcmOpCode::RxDelete => cglue::can_BCM_OPE_x_RX_DELETE,
-            CanBcmOpCode::RxRead => cglue::can_BCM_OPE_x_RX_READ,
-            CanBcmOpCode::RxStatus => cglue::can_BCM_OPE_x_RX_STATUS,
-            CanBcmOpCode::RxTimeout => cglue::can_BCM_OPE_x_RX_TIMEOUT,
-            CanBcmOpCode::RxChanged => cglue::can_BCM_OPE_x_RX_CHANGED,
-            CanBcmOpCode::Unknown => 0xFFFF,
-        }
-    }
 }
 
 /// Classical CAN frame structure (aka CAN 2.0B)
@@ -134,7 +67,7 @@ impl CanBcmOpCode {
 ///            8 bytes but the DLC value (see ISO 11898-1) is greater then 8.
 ///            CAN_CTRLMODE_CC_LEN8_DLC flag has to be enabled in CAN driver.
 /// @data:     CAN frame payload (up to 8 byte)
-pub struct CanFrameRaw(cglue::can_frame);
+pub struct CanFrameRaw(pub cglue::can_frame);
 impl CanFrameRaw {
     pub fn new(canid: SockCanId, len: u8, pad: u8, res: u8, data: [u8; 8usize]) -> Self {
         CanFrameRaw {
@@ -170,7 +103,7 @@ impl CanFrameRaw {
         &self.0.data
     }
 }
-pub struct CanFdFrameRaw(cglue::canfd_frame);
+pub struct CanFdFrameRaw(pub cglue::canfd_frame);
 impl CanFdFrameRaw {
     pub fn new(
         canid: SockCanId,
@@ -278,10 +211,6 @@ impl From<*const CanFdFrameRaw> for CanAnyFrame {
     }
 }
 
-struct CanBcmOneMsg(cglue::can_bcm_one_msg);
-struct CanFdBcmOneMsg(cglue::canfd_bcm_one_msg);
-struct CanBcmHeader(cglue::bcm_msg_head);
-
 pub struct SockCanMsg {
     iface: i32,
     stamp: u64,
@@ -299,75 +228,6 @@ impl SockCanMsg {
 
     pub fn get_raw(&self) -> &CanAnyFrame {
         &self.frame
-    }
-
-    pub fn get_ifname(&self, sock: &SockCanHandle) -> Result<String, CanError> {
-        let mut ifreq: cglue::ifreq = unsafe { mem::MaybeUninit::uninit().assume_init() };
-        ifreq.ifr_ifru.ifru_ivalue /* ifr_index */= self.iface;
-        let rc = unsafe { cglue::ioctl(sock.sockfd, cglue::can_SOCK_x_SIOCGIFNAME as u64, &ifreq) };
-
-        if rc < 0 {
-            Err(CanError::new("can-ifname-fail", cglue::get_perror()))
-        } else {
-            let cstring = unsafe { CStr::from_ptr(&ifreq.ifr_ifrn.ifrn_name as *const i8) };
-            match cstring.to_str() {
-                Err(error) => Err(CanError::new("can-ifname-invalid", error.to_string())),
-                Ok(slice) => Ok(slice.to_owned()),
-            }
-        }
-    }
-
-    pub fn get_len(&self) -> Result<u8, CanError> {
-        self.frame.get_len()
-    }
-
-    pub fn get_id(&self) -> Result<u32, CanError> {
-        self.frame.get_id()
-    }
-
-    pub fn get_data(&self) -> Result<&[u8], CanError> {
-        self.frame.get_data()
-    }
-}
-
-pub struct SockBcmMsg {
-    opcode: CanBcmOpCode,
-    iface: i32,
-    stamp: u64,
-    frame: CanAnyFrame,
-}
-
-impl SockBcmMsg {
-    pub fn get_iface(&self) -> i32 {
-        self.iface
-    }
-
-    pub fn get_opcode(&self) -> CanBcmOpCode {
-        self.opcode
-    }
-
-    pub fn get_stamp(&self) -> u64 {
-        self.stamp
-    }
-
-    pub fn get_raw(&self) -> &CanAnyFrame {
-        &self.frame
-    }
-
-    pub fn get_ifname(&self, sock: &SockCanHandle) -> Result<String, CanError> {
-        let mut ifreq: cglue::ifreq = unsafe { mem::MaybeUninit::uninit().assume_init() };
-        ifreq.ifr_ifru.ifru_ivalue /* ifr_index */= self.iface;
-        let rc = unsafe { cglue::ioctl(sock.sockfd, cglue::can_SOCK_x_SIOCGIFNAME as u64, &ifreq) };
-
-        if rc < 0 {
-            Err(CanError::new("can-ifname-fail", cglue::get_perror()))
-        } else {
-            let cstring = unsafe { CStr::from_ptr(&ifreq.ifr_ifrn.ifrn_name as *const i8) };
-            match cstring.to_str() {
-                Err(error) => Err(CanError::new("can-ifname-invalid", error.to_string())),
-                Ok(slice) => Ok(slice.to_owned()),
-            }
-        }
     }
 
     pub fn get_len(&self) -> Result<u8, CanError> {
@@ -388,23 +248,49 @@ pub struct SockCanFilter {
     masks: Vec<cglue::can_filter>,
 }
 
-enum SockCanMod {
+pub enum SockCanMod {
     RAW,
     BCM,
+    J1939,
     _ISOTP,
-    _J1939,
-    _NMEA2000,
 }
 
-struct CanRecvInfo {
-    stamp: u64,
-    count: isize,
-    iface: i32,
+#[derive(Clone, Copy)]
+pub struct CanJ1939Header {
+    pub name: u64,
+    pub addr: u8,
+}
+#[derive(Clone, Copy)]
+pub struct CanJ1939Info {
+    pub src: CanJ1939Header,
+    pub dst: CanJ1939Header,
+    pub pgn: u32,
+}
+
+#[derive(Clone, Copy)]
+pub struct CanIsoTpInfo {
+    pub src: CanJ1939Header,
+    pub dst: CanJ1939Header,
+    pub pgn: u32,
+}
+
+#[derive(Clone, Copy)]
+pub union CanProtoInfo {
+    pub j1939: CanJ1939Info,
+    pub idotp: CanIsoTpInfo,
+}
+
+#[derive(Clone, Copy)]
+pub struct CanRecvInfo {
+    pub proto: CanProtoInfo,
+    pub stamp: u64,
+    pub count: isize,
+    pub iface: i32,
 }
 
 pub struct SockCanHandle {
-    sockfd: ::std::os::raw::c_int,
-    mode: SockCanMod,
+    pub sockfd: ::std::os::raw::c_int,
+    pub mode: SockCanMod,
 }
 
 pub trait CanIFaceFrom<T> {
@@ -449,8 +335,8 @@ impl SockCanHandle {
         let sockfd = unsafe {
             cglue::socket(
                 cglue::can_SOCK_x_PF_CAN as i32,
-                cglue::can_SOCK_x_SOCK_RAW as i32,
-                cglue::can_PF_x_RAW as i32,
+                cglue::can_SOCK_x_RAW as i32,
+                cglue::can_SOCK_x_CANRAW as i32,
             )
         };
         if sockfd < 0 {
@@ -494,64 +380,28 @@ impl SockCanHandle {
         Ok(sockcan)
     }
 
-    pub fn open_bcm<T>(candev: T, timestamp: CanTimeStamp) -> Result<Self, CanError>
-    where
-        SockCanHandle: CanIFaceFrom<T>,
-    {
-        let sockfd = unsafe {
-            cglue::socket(
-                cglue::can_SOCK_x_AF_CAN as i32,
-                cglue::can_SOCK_x_SOCK_DGRAM as i32,
-                cglue::can_PF_x_BCM as i32,
-            )
-        };
-        if sockfd < 0 {
-            return Err(CanError::new("fail-socketcan-open", cglue::get_perror()));
-        }
-
-        let index = SockCanHandle::map_can_iface(sockfd, candev);
-        if index < 0 {
-            return Err(CanError::new("fail-socketcan-iface", cglue::get_perror()));
-        }
-
-        #[allow(invalid_value)]
-        let mut canaddr: cglue::sockaddr_can = unsafe { MaybeUninit::uninit().assume_init() };
-        canaddr.can_family = cglue::can_SOCK_x_AF_CAN as u16;
-        canaddr.can_ifindex = index;
-
-        let sockaddr = cglue::__CONST_SOCKADDR_ARG {
-            __sockaddr__: &canaddr as *const _ as *const cglue::sockaddr,
-        };
-        let status = unsafe {
-            cglue::connect(
-                sockfd,
-                sockaddr,
-                mem::size_of::<cglue::sockaddr_can>() as cglue::socklen_t,
-            )
-        };
-        if status < 0 {
-            return Err(CanError::new("fail-socketcan-connect", cglue::get_perror()));
-        }
-
-        let mut sockcan = SockCanHandle {
-            sockfd: sockfd,
-            mode: SockCanMod::BCM,
-        };
-
-        match sockcan.set_timestamp(timestamp) {
-            Err(error) => return Err(error),
-            Ok(_value) => {}
-        }
-
-        Ok(sockcan)
-    }
-
     pub fn close(&self) {
         unsafe { cglue::close(self.sockfd) };
     }
 
     pub fn as_rawfd(&self) -> i32 {
         self.sockfd
+    }
+
+    pub fn get_ifname(&self, iface: i32) -> Result<String, CanError> {
+        let mut ifreq: cglue::ifreq = unsafe { mem::MaybeUninit::uninit().assume_init() };
+        ifreq.ifr_ifru.ifru_ivalue /* ifr_index */= iface;
+        let rc = unsafe { cglue::ioctl(self.sockfd, cglue::can_SOCK_x_SIOCGIFNAME as u64, &ifreq) };
+
+        if rc < 0 {
+            Err(CanError::new("can-ifname-fail", cglue::get_perror()))
+        } else {
+            let cstring = unsafe { CStr::from_ptr(&ifreq.ifr_ifrn.ifrn_name as *const i8) };
+            match cstring.to_str() {
+                Err(error) => Err(CanError::new("can-ifname-invalid", error.to_string())),
+                Ok(slice) => Ok(slice.to_owned()),
+            }
+        }
     }
 
     pub fn set_blocking(&mut self, blocking: bool) -> Result<&mut Self, CanError> {
@@ -636,7 +486,7 @@ impl SockCanHandle {
         Ok(self)
     }
 
-    fn set_timestamp(&mut self, timestamp: CanTimeStamp) -> Result<&mut Self, CanError> {
+    pub fn set_timestamp(&mut self, timestamp: CanTimeStamp) -> Result<&mut Self, CanError> {
         let status = match timestamp {
             CanTimeStamp::SOFTWARE => {
                 let flag = cglue::can_RAW_x_SOF_TIMESTAMPING_RX_SOFTWARE;
@@ -733,7 +583,9 @@ impl SockCanHandle {
         }
     }
 
-    fn recv_can_msg(&self, buffer: &mut [u8], size: u32) -> CanRecvInfo {
+    pub fn recv_can_msg(&self, buffer: *mut u8, size: u32) -> CanRecvInfo {
+        let mut info: CanRecvInfo = unsafe { mem::zeroed::<CanRecvInfo>() };
+
         let iovec = cglue::iovec {
             iov_base: buffer as *const _ as *mut std::ffi::c_void,
             iov_len: size as usize,
@@ -755,66 +607,86 @@ impl SockCanHandle {
         msg_hdr.msg_control = &control as *const _ as *mut std::ffi::c_void;
         msg_hdr.msg_controllen = mem::size_of::<cglue::can_stamp_msg>();
 
-        let count =
+        info.count =
             unsafe { cglue::recvmsg(self.sockfd, &msg_hdr as *const _ as *mut cglue::msghdr, 0) };
 
-        let iface = if msg_hdr.msg_namelen >= 8 {
+        if msg_hdr.msg_namelen >= 8 {
             let canaddr = unsafe { &*(msg_hdr.msg_name as *const _ as *mut cglue::sockaddr_can) };
-            canaddr.can_ifindex
-        } else {
-            0
-        };
+            info.iface= canaddr.can_ifindex
+        }
 
         // ref: https://github.com/torvalds/linux/blob/master/tools/testing/selftests/net/timestamping.c
-        let cmsg = unsafe { &*cglue::CMSG_FIRSTHDR(&msg_hdr) };
-        let mut stamp = 0;
+        let mut cmsg = unsafe { &*cglue::CMSG_FIRSTHDR(&msg_hdr) };
+
         while cmsg as *const _ != 0 as *const _ {
-            if cmsg.cmsg_level == cglue::can_SOCK_x_SOL_SOCKET as i32 {
-                match cmsg.cmsg_type as u32 {
+            match cmsg.cmsg_level as u32 {
+                cglue::can_SOCK_x_SOL_SOCKET => match cmsg.cmsg_type as u32 {
                     cglue::can_RAW_x_SO_TIMESTAMPING => {
                         let time = unsafe {
                             &*(cglue::CMSG_DATA(cmsg) as *const _ as *mut cglue::timespec)
                         };
-                        stamp = (time.tv_sec * 1000000 + time.tv_nsec) as u64;
+                        info.stamp = (time.tv_sec * 1000000 + time.tv_nsec) as u64;
                         break;
                     }
                     cglue::can_RAW_x_SO_TIMESTAMP_NEW => {
                         let time = unsafe {
                             &*(cglue::CMSG_DATA(cmsg) as *const _ as *mut cglue::timespec)
                         };
-                        stamp = (time.tv_sec * 1000000 + time.tv_nsec) as u64;
+                        info.stamp = (time.tv_sec * 1000000 + time.tv_nsec) as u64;
                         break;
                     }
                     cglue::can_RAW_x_SO_TIMESTAMPNS => {
                         let time = unsafe {
                             &*(cglue::CMSG_DATA(cmsg) as *const _ as *mut cglue::timespec)
                         };
-                        stamp = (time.tv_sec * 1000000 + time.tv_nsec) as u64;
+                        info.stamp = (time.tv_sec * 1000000 + time.tv_nsec) as u64;
                         break;
                     }
                     cglue::can_RAW_x_SO_TIMESTAMP => {
                         let time = unsafe {
                             &*(cglue::CMSG_DATA(cmsg) as *const _ as *mut cglue::timeval)
                         };
-                        stamp = (time.tv_sec * 1000000 + time.tv_usec) as u64;
+                        info.stamp = (time.tv_sec * 1000000 + time.tv_usec) as u64;
                         break;
                     }
                     _ => {}
+                },
+
+                cglue::can_J1939_x_SOL_CAN_J1939 => {
+                    info.iface = canaddr.can_ifindex;
+                    info.proto.j1939.src.name = unsafe { canaddr.can_addr.j1939.name };
+                    info.proto.j1939.src.addr = unsafe { canaddr.can_addr.j1939.addr };
+                    info.proto.j1939.pgn = unsafe { canaddr.can_addr.j1939.pgn };
+
+                    match cmsg.cmsg_type as u32 {
+                        cglue::can_J1939_x_SCM_DEST_ADDR => {
+                            let addr = unsafe { &*(cglue::CMSG_DATA(cmsg) as *const _ as *mut u8) };
+                            info.proto.j1939.dst.addr = *addr;
+                        }
+                        cglue::can_J1939_x_SCM_DEST_NAME => {
+                            let name =
+                                unsafe { &*(cglue::CMSG_DATA(cmsg) as *const _ as *mut u64) };
+                            info.proto.j1939.dst.name = *name;
+                        }
+                        // cglue::can_J1939_x_SCM_PRIO => {
+                        //     let prio = unsafe { &*(cglue::CMSG_DATA(cmsg) as *const _ as *mut u8) };
+                        //     info.j1939.prio= *prio;
+                        // }
+                        _ => {}
+                    }
                 }
+                _ => {}
             }
+            cmsg = unsafe { &*cglue::CMSG_NXTHDR(&msg_hdr, cmsg) };
         }
-        CanRecvInfo {
-            stamp: stamp,
-            count: count,
-            iface: iface,
-        }
+        info
     }
 
     pub fn get_can_frame(&self) -> SockCanMsg {
         #[allow(invalid_value)]
         let mut buffer: [u8; cglue::can_MTU_x_FD_MTU as usize] =
             unsafe { MaybeUninit::uninit().assume_init() };
-        let info = self.recv_can_msg(&mut buffer, cglue::can_MTU_x_FD_MTU);
+        let info = self.recv_can_msg(buffer.as_mut_ptr(), cglue::can_MTU_x_FD_MTU);
 
         let can_any_frame = if info.count == mem::size_of::<CanFrameRaw>() as isize {
             CanAnyFrame::from(&buffer as *const _ as *const CanFrameRaw)
@@ -825,38 +697,6 @@ impl SockCanHandle {
         };
 
         SockCanMsg {
-            frame: can_any_frame,
-            iface: info.iface,
-            stamp: info.stamp,
-        }
-    }
-
-    pub fn get_bcm_frame(&self) -> SockBcmMsg {
-        #[allow(invalid_value)]
-        let mut buffer: [u8; mem::size_of::<CanFdBcmOneMsg>()] =
-            unsafe { MaybeUninit::uninit().assume_init() };
-        let info = self.recv_can_msg(&mut buffer, mem::size_of::<CanFdBcmOneMsg>() as u32);
-        let one_msg = unsafe { &*(&buffer as *const _ as *const CanBcmOneMsg) };
-
-        let can_any_frame = if info.count == mem::size_of::<CanBcmOneMsg>() as isize {
-            CanAnyFrame::from(&one_msg.0.frame as *const _ as *const CanFrameRaw)
-        } else if info.count == mem::size_of::<CanFdBcmOneMsg>() as isize {
-            let one_msg = unsafe { &*(&buffer as *const _ as *const CanFdBcmOneMsg) };
-            CanAnyFrame::from(&one_msg.0.frame as *const _ as *const CanFdFrameRaw)
-        } else if info.count == mem::size_of::<CanBcmHeader>() as isize {
-            let header = unsafe { &*(&buffer as *const _ as *const CanBcmHeader) };
-            CanAnyFrame::None(header.0.can_id)
-        } else {
-            CanAnyFrame::Err(CanError::new("bcm-invalid-frame", cglue::get_perror()))
-        };
-
-        let opcode = match CanBcmOpCode::from(one_msg.0.head.opcode) {
-            Ok(value) => value,
-            Err(_error) => CanBcmOpCode::Unknown,
-        };
-
-        SockBcmMsg {
-            opcode: opcode,
             frame: can_any_frame,
             iface: info.iface,
             stamp: info.stamp,
@@ -922,272 +762,6 @@ impl SockCanFilter {
         };
         if status < 0 {
             return Err(CanError::new("fail-socketcan-bind", cglue::get_perror()));
-        } else {
-            Ok(())
-        }
-    }
-}
-
-// struct bcm_msg
-// {
-// 	union {
-// 		struct canfd_frame fd_frames[MAX_BCM_CAN_FRAMES];
-// 		struct can_frame frames[MAX_BCM_CAN_FRAMES];
-// 	};
-// 	struct bcm_msg_head msg_head;
-// };
-
-pub struct CanBcmMsg(cglue::can_bcm_msg);
-impl CanBcmMsg {
-    pub fn empty() -> CanBcmMsg {
-        unsafe { mem::zeroed::<Self>() }
-    }
-
-    pub fn as_raw(&self) -> *mut std::ffi::c_void {
-        &self.0 as *const _ as *mut std::ffi::c_void
-    }
-
-    pub fn get_count(&self) -> u32 {
-        self.0.head.count
-    }
-
-    pub fn get_id(&self) -> u32 {
-        self.0.head.can_id
-    }
-
-    pub fn check_flags(&self, flags: CanBcmFlag) -> bool {
-        flags.bits() & self.0.head.flags != 0
-    }
-}
-
-pub struct CanFdBcmMsg(cglue::canfd_bcm_msg);
-impl CanFdBcmMsg {
-    pub fn empty() -> CanFdBcmMsg {
-        unsafe { mem::zeroed::<Self>() }
-    }
-
-    pub fn as_raw(&self) -> *mut std::ffi::c_void {
-        &self.0 as *const _ as *mut std::ffi::c_void
-    }
-
-    pub fn get_count(&self) -> u32 {
-        self.0.head.count
-    }
-
-    pub fn get_id(&self) -> u32 {
-        self.0.head.can_id
-    }
-
-    pub fn check_flags(&self, flags: CanBcmFlag) -> bool {
-        flags.bits() & self.0.head.flags != 0
-    }
-}
-
-pub struct SockBcmCmd {
-    opcode: CanBcmOpCode,
-    flags: CanBcmFlag,
-    rx_watchdog: u64,
-    rx_maxrate: u64,
-    canid: SockCanId,
-    frames: Vec<CanFrameRaw>,
-    fdframes: Vec<CanFdFrameRaw>,
-    muxid: Vec<SockCanId>,
-}
-
-pub trait CanBcmAddFilter<T> {
-    fn add_filter(&mut self, filter: T) -> &mut Self;
-}
-
-impl CanBcmAddFilter<SockCanId> for SockBcmCmd {
-    fn add_filter(&mut self, filter: SockCanId) -> &mut Self {
-        self.muxid.push(filter);
-        self
-    }
-}
-
-impl CanBcmAddFilter<CanFrameRaw> for SockBcmCmd {
-    fn add_filter(&mut self, filter: CanFrameRaw) -> &mut Self {
-        self.frames.push(filter);
-        self
-    }
-}
-
-impl CanBcmAddFilter<CanFdFrameRaw> for SockBcmCmd {
-    fn add_filter(&mut self, filter: CanFdFrameRaw) -> &mut Self {
-        self.fdframes.push(filter);
-        self
-    }
-}
-
-impl SockBcmCmd {
-    pub fn new(opcode: CanBcmOpCode, flags: CanBcmFlag, canid: SockCanId) -> Self {
-        // BCM filter have at least one filter
-        SockBcmCmd {
-            opcode: opcode,
-            flags: flags,
-            canid: canid,
-            frames: Vec::new(),
-            fdframes: Vec::new(),
-            muxid: Vec::new(),
-            rx_maxrate: 0,
-            rx_watchdog: 0,
-        }
-    }
-
-    pub fn set_timers(&mut self, rx_maxrate: u64, rx_watchdog: u64) -> &mut Self {
-        self.rx_watchdog = rx_watchdog;
-        self.rx_maxrate = rx_maxrate;
-        self
-    }
-
-    pub fn add_multiplex<T>(&mut self, filter: T) -> &mut Self
-    where
-        SockBcmCmd: CanBcmAddFilter<T>,
-    {
-        self.add_filter(filter);
-        self
-    }
-
-    fn msg_head(&self, head: &mut cglue::bcm_msg_head) {
-        head.opcode = CanBcmOpCode::as_u32(&self.opcode);
-        head.can_id = self.canid;
-        head.flags = self.flags.bits();
-        head.nframes = 0;
-
-        if self.rx_watchdog > 0 {
-            head.ival1 = cglue::bcm_timeval {
-                tv_sec: (self.rx_watchdog / 1000) as i64,
-                tv_usec: (self.rx_watchdog * 1000 % 1000000) as i64,
-            };
-        }
-
-        if self.rx_maxrate > 0 {
-            head.ival2 = cglue::bcm_timeval {
-                tv_sec: (self.rx_maxrate / 1000) as i64,
-                tv_usec: (self.rx_maxrate * 1000 % 1000000) as i64,
-            };
-        }
-    }
-
-    pub fn apply(&mut self, sock: &SockCanHandle) -> Result<(), CanError> {
-        match sock.mode {
-            SockCanMod::BCM => {}
-            _ => {
-                return Err(CanError::new(
-                    "invalid-socketcan-mod",
-                    "not a BCM socketcan",
-                ))
-            }
-        }
-
-        match self.opcode {
-            CanBcmOpCode::RxSetup => {
-                if CanBcmFlag::check(CanBcmFlag::RX_FILTER_ID, self.flags.bits()) {
-                    if self.frames.len() > 0 || self.fdframes.len() > 0 {
-                        return Err(CanError::new(
-                            "invalid-multiplex-filter",
-                            "RX_FILTER_ID and Multiplex filter are exclusinve",
-                        ));
-                    }
-                } else if CanBcmFlag::check(CanBcmFlag::FD_FRAME, self.flags.bits()) {
-                    if self.frames.len() > 0 {
-                        return Err(CanError::new(
-                            "invalid-socketcan-filter",
-                            "BCM:FdFrame no stdFrame mask allow",
-                        ));
-                    };
-                    if self.fdframes.len() == 0 {
-                        return Err(CanError::new(
-                            "invalid-socketcan-filter",
-                            "BCM:FdFrame no filter defined",
-                        ));
-                    };
-                } else {
-                    if self.frames.len() == 0 {
-                        return Err(CanError::new(
-                            "invalid-socketcan-filter",
-                            "BCM:StdFrame no filter defined",
-                        ));
-                    };
-                }
-            },
-
-            CanBcmOpCode::RxDelete => {
-                if self.frames.len() != 0 {
-                    return Err(CanError::new(
-                        "invalid-socketcan-filter",
-                        "BCM:RxDelete does not accept frames",
-                    ));
-                };
-            }
-            _ => {
-                return Err(CanError::new(
-                    "invalid-bcm-operation",
-                    "bcm operation not yet implemented",
-                ));
-            }
-        }
-
-        // cglue::bcm_msg_head {
-        //     opcode: cglue::can_BCM_x_RX_SETUP,
-        //     can_id: self.canid,
-        //     nframes: self.count as u32,
-        //     flags: 0,
-        //     count: 0,
-        //     ival1: cglue::bcm_timeval { tv_sec:0, tv_usec:0},
-        //     ival2: cglue::bcm_timeval { tv_sec:0, tv_usec:0},
-        //     frames: cglue::__IncompleteArrayField::<cglue::can_frame>::new()
-        // };
-
-        let (buffer_addr, buffer_len) =
-            if !CanBcmFlag::check(CanBcmFlag::FD_FRAME, self.flags.bits()) {
-                // standard can messages
-                #[allow(invalid_value)]
-                let mut bcm_msg: cglue::can_bcm_msg =
-                    unsafe { MaybeUninit::uninit().assume_init() };
-                // haed is common to std and fd frames
-                self.msg_head(&mut bcm_msg.head);
-
-                for idx in 0..self.frames.len() {
-                    bcm_msg.frames[idx] = self.frames[idx].0;
-                }
-
-                for idx in 0..self.muxid.len() {
-                    bcm_msg.frames[idx] = CanFrameRaw::empty(self.muxid[idx]).0;
-                }
-
-                bcm_msg.head.nframes = (self.muxid.len() + self.frames.len()) as u32;
-                let buffer = &bcm_msg as *const _ as *const ::std::os::raw::c_void;
-                let len = mem::size_of::<cglue::bcm_msg_head>()
-                    + bcm_msg.head.nframes as usize * mem::size_of::<cglue::can_frame>();
-
-                (buffer, len)
-            } else {
-                // fdcan can messages
-                #[allow(invalid_value)]
-                let mut bcm_msg: cglue::canfd_bcm_msg =
-                    unsafe { MaybeUninit::uninit().assume_init() };
-                self.msg_head(&mut bcm_msg.head);
-
-                for idx in 0..self.fdframes.len() {
-                    bcm_msg.fdframes[idx] = self.fdframes[idx].0;
-                }
-
-                for idx in 0..self.muxid.len() {
-                    bcm_msg.fdframes[idx] = CanFdFrameRaw::empty(self.muxid[idx]).0;
-                }
-
-                bcm_msg.head.nframes = (self.muxid.len() + self.frames.len()) as u32;
-                let buffer = &bcm_msg as *const _ as *const ::std::os::raw::c_void;
-                let len = mem::size_of::<cglue::bcm_msg_head>()
-                    + bcm_msg.head.nframes as usize * mem::size_of::<cglue::can_frame>();
-
-                (buffer, len)
-            };
-
-        let count = unsafe { cglue::write(sock.sockfd, buffer_addr, buffer_len) };
-        if count != buffer_len as isize {
-            return Err(CanError::new("fail-socketbcm-write", cglue::get_perror()));
         } else {
             Ok(())
         }

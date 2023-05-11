@@ -22,14 +22,23 @@ mod cglue;
 #[path = "./utils-mod.rs"]
 mod utils;
 
-#[path = "./socket-mod.rs"]
-mod socket;
+#[path = "./socket-can.rs"]
+mod sockcan;
+
+#[path = "./socket-bmc.rs"]
+mod sockbmc;
+
+#[path = "./socket-j1939.rs"]
+mod sockj1939;
+
 
 #[path = "./dbcpool-mod.rs"]
 mod dbcpool;
 
 pub mod prelude {
-    pub use crate::socket::*;
+    pub use crate::sockcan::*;
+    pub use crate::sockbmc::*;
+    pub use crate::sockj1939::*;
     pub use crate::utils::*;
     pub use crate::dbcpool::*;
 }

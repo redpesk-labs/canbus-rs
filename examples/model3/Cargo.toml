@@ -1,0 +1,22 @@
+[package]
+name = "can-model3"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bitvec = { version = "1.0", default-features = false }
+bitflags = { version = "2"}
+serde = { version = "1.0", features = ["derive"], optional = true }
+serde_json={ version= "1.0", optional = true }
+lib_sockcan= {path ="../../sockcan"}
+lib_dbcparser= {path ="../../dbcparser"}
+
+[build-dependencies]
+lib_dbcparser= {path ="../../dbcparser"}
+
+[[bin]]
+name = "can-model3"
+path = "src/can-model3.rs"
+
+[features]
+default = ["serde","serde_json"]

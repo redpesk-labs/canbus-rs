@@ -56,6 +56,7 @@ fn main() {
         .allowlist_function("strerror_r")
         .allowlist_type(".*_can")
         .allowlist_type("can_.*")
+        .allowlist_type("j1939_.*")
         .allowlist_type("canfd_.*")
         .allowlist_type("ifreq")
         .allowlist_type("timeval")

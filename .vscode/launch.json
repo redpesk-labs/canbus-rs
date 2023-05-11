@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Native 'can-read'",
+            "name": "can-read",
             "type": "lldb",
             "preLaunchTask": "sockcan-native-compile",
             "request": "launch",
@@ -19,7 +19,7 @@
             ]
         },
         {
-            "name": "Native 'can-bmc'",
+            "name": "can-bmc",
             "type": "lldb",
             "preLaunchTask": "sockcan-native-compile",
             "request": "launch",
@@ -36,7 +36,7 @@
             ]
         },
         {
-            "name": "Native 'can-dbc'",
+            "name": "can-dbc",
             "type": "lldb",
             "preLaunchTask": "sockcan-native-compile",
             "request": "launch",
@@ -55,7 +55,7 @@
             ]
         },
         {
-            "name": "Native 'can-display'",
+            "name": "can-display",
             "type": "lldb",
             "preLaunchTask": "sockcan-native-compile",
             "request": "launch",
@@ -72,24 +72,20 @@
             ]
         },
         {
-            "name": "Native 'tap-test-auto'",
+            "name": "can-j1939",
             "type": "lldb",
-            "preLaunchTask": "test-native-compile",
+            "preLaunchTask": "sockcan-native-compile",
             "request": "launch",
-            "program": "afb-binder",
+            "program": "${env:CARGO_TARGET_DIR}debug/can-j1939",
             "env": {
                 "LD_LIBRARY_PATH": "/usr/local/lib64"
             },
             "args": [
-                "-vvv",
-                "--trap-faults=1",
-                "--config=examples/test/etc/binding-test-tap.json",
             ],
             "cwd": "${workspaceFolder}",
             "initCommands": [
                 "target stop-hook add -n _start -o continue",
-                "settings set target.disable-aslr false",
-                "process handle -p true -s false -n true SIGVTALRM"
+                "settings set target.disable-aslr false"
             ]
         },
     ]

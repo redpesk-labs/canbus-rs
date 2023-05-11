@@ -1,17 +1,12 @@
 [package]
-name = "can-demo"
+name = "can-basic"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 bitvec = { version = "1.0", default-features = false }
 bitflags = { version = "2"}
-serde = { version = "1.0", features = ["derive"], optional = true }
-serde_json={ version= "1.0", optional = true }
 lib_sockcan= {path ="../../sockcan"}
-lib_dbcparser= {path ="../../dbcparser"}
-
-[build-dependencies]
 lib_dbcparser= {path ="../../dbcparser"}
 
 [[bin]]
@@ -27,8 +22,5 @@ name = "can-dbc"
 path = "src/parse-dbc.rs"
 
 [[bin]]
-name = "can-display"
-path = "src/can-display.rs"
-
-[features]
-default = ["serde","serde_json"]
+name = "can-j1939"
+path = "src/read-j1939.rs"

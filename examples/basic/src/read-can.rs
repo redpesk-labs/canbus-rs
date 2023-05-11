@@ -7,8 +7,6 @@
  *
  */
 extern crate sockcan;
-
-//use bitvec::prelude::*;
 use sockcan::prelude::*;
 
 
@@ -34,16 +32,18 @@ fn main() -> Result <(), String> {
     let frame_id= frame.get_id().unwrap();
     let frame_len= frame.get_len().unwrap();
     let frame_stamp=frame.get_stamp();
-    let frame_source= frame.get_ifname(&sockfd).unwrap();
-    println!("Received FdFrame id:{:#04x} stamp:{} source:{} len:{}", frame_id, frame_stamp, frame_source, frame_len);
+    let frame_data=frame.get_data();
+    let frame_source= sockfd.get_ifname(frame.get_iface()).unwrap();
+    println!("Received FdFrame id:{:#04x} stamp:{} source:{} len:{} data:{:?}", frame_id, frame_stamp, frame_source, frame_len, frame_data);
 
     println! ("Waiting for Raw CAN package");
     loop {
         let frame= sockfd.get_can_frame();
         let frame_stamp=frame.get_stamp();
+        let frame_data=frame.get_data();
         match frame.get_raw() {
-            CanAnyFrame::RawFd(frame) => println!("Received FdFrame id:{:#04x} stamp:{} len:{}", frame.get_id(), frame_stamp, frame.get_len()),
-            CanAnyFrame::RawStd(frame) => println!("Received StdFrame id:{:#04x} stamp:{}", frame.get_id(), frame_stamp),
+            CanAnyFrame::RawFd(frame) => println!("Received FdFrame id:{:#04x} stamp:{} len:{} data:{:?}", frame.get_id(), frame_stamp, frame.get_len(), frame_data),
+            CanAnyFrame::RawStd(frame) => println!("Received StdFrame id:{:#04x} stamp:{}, len:{} data:{:?}", frame.get_id(), frame_stamp, frame.get_len(), frame_data),
             CanAnyFrame::Err(error) => panic!("Fail reading candev Error:{}", error.to_string()),
             CanAnyFrame::None(canid) => println!("Received Timeout id:{:#04x}", *canid),
         }

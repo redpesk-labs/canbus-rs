@@ -395,6 +395,18 @@ pub struct can_isotp_ll_options {
     pub tx_dl: __u8,
     pub tx_flags: __u8,
 }
+pub type pgn_t = __u32;
+pub type name_t = __u64;
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct j1939_filter {
+    pub name: name_t,
+    pub name_mask: name_t,
+    pub pgn: pgn_t,
+    pub pgn_mask: pgn_t,
+    pub addr: __u8,
+    pub addr_mask: __u8,
+}
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct can_bittiming {
@@ -495,11 +507,13 @@ pub const can_CMSG_CMSG_NXTHDR: can_CMSG = 2;
 pub type can_CMSG = ::std::os::raw::c_uint;
 pub const can_SOCK_x_PF_CAN: can_SOCK = 29;
 pub const can_SOCK_x_AF_CAN: can_SOCK = 29;
-pub const can_SOCK_x_SOCK_RAW: can_SOCK = 3;
+pub const can_SOCK_x_RAW: can_SOCK = 3;
+pub const can_SOCK_x_DGRAM: can_SOCK = 2;
 pub const can_SOCK_x_IFACE_LEN: can_SOCK = 16;
 pub const can_SOCK_x_SIOCGIFINDEX: can_SOCK = 35123;
 pub const can_SOCK_x_SIOCGIFNAME: can_SOCK = 35088;
 pub const can_SOCK_x_SIOCGSTAMP: can_SOCK = 35078;
+pub const can_SOCK_x_SO_BROADCAST: can_SOCK = 6;
 pub const can_SOCK_x_SFF_ID_BITS: can_SOCK = 11;
 pub const can_SOCK_x_EFF_ID_BITS: can_SOCK = 29;
 pub const can_SOCK_x_MAX_DLC: can_SOCK = 8;
@@ -507,7 +521,6 @@ pub const can_SOCK_x_MAX_RAW_DLC: can_SOCK = 15;
 pub const can_SOCK_x_MAX_DLEN: can_SOCK = 8;
 pub const can_SOCK_x_FD_MAX_DLC: can_SOCK = 15;
 pub const can_SOCK_x_FD_MAX_DLEN: can_SOCK = 64;
-pub const can_SOCK_x_SOCK_DGRAM: can_SOCK = 2;
 pub const can_SOCK_x_F_GETFL: can_SOCK = 3;
 pub const can_SOCK_x_F_SETFL: can_SOCK = 4;
 pub const can_SOCK_x_NONBLOCK: can_SOCK = 2048;
@@ -518,20 +531,19 @@ pub const can_SOCK_x_MSG_EOR: can_SOCK = 128;
 pub const can_SOCK_x_MAX_BCM_CAN_FRAMES: can_SOCK = 128;
 pub const can_SOCK_x_MAX_ISOTP_FRAMES: can_SOCK = 4096;
 pub const can_SOCK_x_SIOCGIFMTU: can_SOCK = 35105;
+pub const can_SOCK_x_TP16: can_SOCK = 3;
+pub const can_SOCK_x_TP20: can_SOCK = 4;
+pub const can_SOCK_x_MCNET: can_SOCK = 5;
+pub const can_SOCK_x_CANRAW: can_SOCK = 1;
+pub const can_SOCK_x_BCM: can_SOCK = 2;
+pub const can_SOCK_x_ISOTP: can_SOCK = 6;
+pub const can_SOCK_x_J1939: can_SOCK = 7;
+pub const can_SOCK_x_NPROTO: can_SOCK = 8;
 pub type can_SOCK = ::std::os::raw::c_uint;
 pub const can_MASK_x_SFF_MASK: can_MASK = 2047;
 pub const can_MASK_x_EFF_MASK: can_MASK = 536870911;
 pub const can_MASK_x_ERR_MASK: can_MASK = 536870911;
 pub type can_MASK = ::std::os::raw::c_uint;
-pub const can_PF_x_RAW: can_PF = 1;
-pub const can_PF_x_BCM: can_PF = 2;
-pub const can_PF_x_TP16: can_PF = 3;
-pub const can_PF_x_TP20: can_PF = 4;
-pub const can_PF_x_MCNET: can_PF = 5;
-pub const can_PF_x_ISOTP: can_PF = 6;
-pub const can_PF_x_J1939: can_PF = 7;
-pub const can_PF_x_NPROTO: can_PF = 8;
-pub type can_PF = ::std::os::raw::c_uint;
 pub const can_MTU_x_MTU: can_MTU = 16;
 pub const can_MTU_x_FD_MTU: can_MTU = 72;
 pub type can_MTU = ::std::os::raw::c_uint;
@@ -651,34 +663,34 @@ pub const can_CGW_x_CS_XOR_LEN: can_CGW = 4;
 pub const can_CGW_x_CS_CRC8_LEN: can_CGW = 282;
 pub const can_CGW_x_CRC8PRF_MAX: can_CGW = 3;
 pub type can_CGW = ::std::os::raw::c_uint;
-pub const can_ISOTP_can_SOL_CAN_ISOTP: can_ISOTP = 106;
-pub const can_ISOTP_x_ISOTP_OPTS: can_ISOTP = 1;
-pub const can_ISOTP_x_ISOTP_RECV_FC: can_ISOTP = 2;
-pub const can_ISOTP_x_ISOTP_TX_STMIN: can_ISOTP = 3;
-pub const can_ISOTP_x_ISOTP_RX_STMIN: can_ISOTP = 4;
-pub const can_ISOTP_x_ISOTP_LL_OPTS: can_ISOTP = 5;
-pub const can_ISOTP_x_ISOTP_LISTEN_MODE: can_ISOTP = 1;
-pub const can_ISOTP_x_ISOTP_EXTEND_ADDR: can_ISOTP = 2;
-pub const can_ISOTP_x_ISOTP_TX_PADDING: can_ISOTP = 4;
-pub const can_ISOTP_x_ISOTP_RX_PADDING: can_ISOTP = 8;
-pub const can_ISOTP_x_ISOTP_CHK_PAD_LEN: can_ISOTP = 16;
-pub const can_ISOTP_x_ISOTP_CHK_PAD_DATA: can_ISOTP = 32;
-pub const can_ISOTP_x_ISOTP_HALF_DUPLEX: can_ISOTP = 64;
-pub const can_ISOTP_x_ISOTP_FORCE_TXSTMIN: can_ISOTP = 128;
-pub const can_ISOTP_x_ISOTP_FORCE_RXSTMIN: can_ISOTP = 256;
-pub const can_ISOTP_x_ISOTP_RX_EXT_ADDR: can_ISOTP = 512;
-pub const can_ISOTP_x_ISOTP_WAIT_TX_DONE: can_ISOTP = 1024;
-pub const can_ISOTP_x_ISOTP_SF_BROADCAST: can_ISOTP = 2048;
-pub const can_ISOTP_x_ISOTP_DEFAULT_FLAGS: can_ISOTP = 0;
-pub const can_ISOTP_x_ISOTP_DEFAULT_EXT_ADDRESS: can_ISOTP = 0;
-pub const can_ISOTP_x_ISOTP_DEFAULT_PAD_CONTENT: can_ISOTP = 204;
-pub const can_ISOTP_x_ISOTP_DEFAULT_FRAME_TXTIME: can_ISOTP = 50000;
-pub const can_ISOTP_x_ISOTP_DEFAULT_RECV_BS: can_ISOTP = 0;
-pub const can_ISOTP_x_ISOTP_DEFAULT_RECV_STMIN: can_ISOTP = 0;
-pub const can_ISOTP_x_ISOTP_DEFAULT_RECV_WFTMAX: can_ISOTP = 0;
-pub const can_ISOTP_x_ISOTP_DEFAULT_LL_MTU: can_ISOTP = 16;
-pub const can_ISOTP_x_ISOTP_DEFAULT_LL_TX_DL: can_ISOTP = 8;
-pub const can_ISOTP_x_ISOTP_DEFAULT_LL_TX_FLAGS: can_ISOTP = 0;
+pub const can_ISOTP_x_SOL_ISOTP: can_ISOTP = 106;
+pub const can_ISOTP_x_OPTS: can_ISOTP = 1;
+pub const can_ISOTP_x_RECV_FC: can_ISOTP = 2;
+pub const can_ISOTP_x_TX_STMIN: can_ISOTP = 3;
+pub const can_ISOTP_x_RX_STMIN: can_ISOTP = 4;
+pub const can_ISOTP_x_LL_OPTS: can_ISOTP = 5;
+pub const can_ISOTP_x_LISTEN_MODE: can_ISOTP = 1;
+pub const can_ISOTP_x_EXTEND_ADDR: can_ISOTP = 2;
+pub const can_ISOTP_x_TX_PADDING: can_ISOTP = 4;
+pub const can_ISOTP_x_RX_PADDING: can_ISOTP = 8;
+pub const can_ISOTP_x_CHK_PAD_LEN: can_ISOTP = 16;
+pub const can_ISOTP_x_CHK_PAD_DATA: can_ISOTP = 32;
+pub const can_ISOTP_x_HALF_DUPLEX: can_ISOTP = 64;
+pub const can_ISOTP_x_FORCE_TXSTMIN: can_ISOTP = 128;
+pub const can_ISOTP_x_FORCE_RXSTMIN: can_ISOTP = 256;
+pub const can_ISOTP_x_RX_EXT_ADDR: can_ISOTP = 512;
+pub const can_ISOTP_x_WAIT_TX_DONE: can_ISOTP = 1024;
+pub const can_ISOTP_x_SF_BROADCAST: can_ISOTP = 2048;
+pub const can_ISOTP_x_DEFAULT_FLAGS: can_ISOTP = 0;
+pub const can_ISOTP_x_DEFAULT_EXT_ADDRESS: can_ISOTP = 0;
+pub const can_ISOTP_x_DEFAULT_PAD_CONTENT: can_ISOTP = 204;
+pub const can_ISOTP_x_DEFAULT_FRAME_TXTIME: can_ISOTP = 0;
+pub const can_ISOTP_x_DEFAULT_RECV_BS: can_ISOTP = 0;
+pub const can_ISOTP_x_DEFAULT_RECV_STMIN: can_ISOTP = 0;
+pub const can_ISOTP_x_DEFAULT_RECV_WFTMAX: can_ISOTP = 0;
+pub const can_ISOTP_x_DEFAULT_LL_MTU: can_ISOTP = 16;
+pub const can_ISOTP_x_DEFAULT_LL_TX_DL: can_ISOTP = 8;
+pub const can_ISOTP_x_DEFAULT_LL_TX_FLAGS: can_ISOTP = 0;
 pub type can_ISOTP = ::std::os::raw::c_uint;
 pub const can_J1939_x_MAX_UNICAST_ADDR: can_J1939 = 253;
 pub const can_J1939_x_IDLE_ADDR: can_J1939 = 254;
@@ -692,6 +704,15 @@ pub const can_J1939_x_PGN_MAX: can_J1939 = 262143;
 pub const can_J1939_x_NO_PGN: can_J1939 = 262144;
 pub const can_J1939_x_SOL_CAN_J1939: can_J1939 = 107;
 pub const can_J1939_x_FILTER_MAX: can_J1939 = 512;
+pub const can_J1939_x_SO_FILTER: can_J1939 = 1;
+pub const can_J1939_x_SO_PROMISC: can_J1939 = 2;
+pub const can_J1939_x_SO_SEND_PRIO: can_J1939 = 3;
+pub const can_J1939_x_SO_ERRQUEUE: can_J1939 = 4;
+pub const can_J1939_x_MAX_TP_PACKET_SIZE: can_J1939 = 1785;
+pub const can_J1939_x_MAX_ETP_PACKET_SIZE: can_J1939 = 117440505;
+pub const can_J1939_x_SCM_DEST_ADDR: can_J1939 = 1;
+pub const can_J1939_x_SCM_DEST_NAME: can_J1939 = 2;
+pub const can_J1939_x_SCM_PRIO: can_J1939 = 3;
 pub type can_J1939 = ::std::os::raw::c_uint;
 pub const can_NETLINK_x_CTRLMODE_LOOPBACK: can_NETLINK = 1;
 pub const can_NETLINK_x_CTRLMODE_LISTENONLY: can_NETLINK = 2;
@@ -702,7 +723,7 @@ pub const can_NETLINK_x_CTRLMODE_FD: can_NETLINK = 32;
 pub const can_NETLINK_x_CTRLMODE_PRESUME_ACK: can_NETLINK = 64;
 pub const can_NETLINK_x_CTRLMODE_FD_NON_ISO: can_NETLINK = 128;
 pub const can_NETLINK_x_CTRLMODE_CC_LEN8_DLC: can_NETLINK = 256;
-pub const can_NETLINK_x_IFLA_CAN_MAX: can_NETLINK = 17;
+pub const can_NETLINK_x_IFLA_CAN_MAX: can_NETLINK = 15;
 pub const can_NETLINK_x_TERMINATION_DISABLED: can_NETLINK = 0;
 pub type can_NETLINK = ::std::os::raw::c_uint;
 pub const can_RAW_x_SOL_CAN_RAW: can_RAW = 101;

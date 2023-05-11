@@ -3,6 +3,7 @@
 members = [
     "dbcparser",
     "sockcan",
-    "examples/demo",
+    "examples/basic",
+    "examples/model3",
     "examples/bms",
 ]
