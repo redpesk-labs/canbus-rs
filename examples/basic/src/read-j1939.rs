@@ -26,7 +26,7 @@ fn main() -> Result<(), String> {
 
     // when using basic/etc/start-pgn129285.sh
     match SockJ1939Filter::new()
-         .add_pgn(129285)
+         .add_fast(129285)
          .apply(&sock)
     {
          Err(error) => panic!("j1939-filter fail Error:{}", error.to_string()),
@@ -51,6 +51,9 @@ fn main() -> Result<(), String> {
                 frame.get_len(),
                 frame.get_data(),
             ),
+            CanJ1939OpCode::RxPartial => {
+                continue;
+            }
             CanJ1939OpCode::RxError => {
                 return Err(format!("unsupported j1939 opcode:{:?}", frame.get_opcode()))
             }

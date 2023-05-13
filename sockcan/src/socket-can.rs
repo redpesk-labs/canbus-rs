@@ -12,6 +12,7 @@
  *
 */
 use bitflags::bitflags;
+use std::cell::RefCell;
 use std::ffi::CStr;
 
 use super::cglue;
@@ -274,23 +275,37 @@ pub struct CanIsoTpInfo {
     pub pgn: u32,
 }
 
-#[derive(Clone, Copy)]
-pub union CanProtoInfo {
-    pub j1939: CanJ1939Info,
-    pub idotp: CanIsoTpInfo,
+#[derive(Clone)]
+pub enum CanProtoInfo {
+   J1939(CanJ1939Info),
+   IsoTp(CanIsoTpInfo),
+   Error(CanError),
+
+   None,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct CanRecvInfo {
     pub proto: CanProtoInfo,
     pub stamp: u64,
     pub count: isize,
     pub iface: i32,
 }
+pub enum SockCanOpCode {
+    RxRead(Vec<u8>),
+    RxError(CanError),
+    RxPartial(usize),
+    RxIgnore,
+    RxInvalid,
+}
+pub trait SockCanCtrl {
+    fn check_frame(&self, data: *const u8, info: &CanRecvInfo) -> SockCanOpCode;
+}
 
 pub struct SockCanHandle {
     pub sockfd: ::std::os::raw::c_int,
     pub mode: SockCanMod,
+    pub callback: Option<RefCell<Box<dyn SockCanCtrl>>>,
 }
 
 pub trait CanIFaceFrom<T> {
@@ -368,8 +383,9 @@ impl SockCanHandle {
         }
 
         let mut sockcan = SockCanHandle {
-            sockfd: sockfd,
             mode: SockCanMod::RAW,
+            sockfd: sockfd,
+            callback: None,
         };
 
         match sockcan.set_timestamp(timestamp) {
@@ -378,6 +394,10 @@ impl SockCanHandle {
         }
 
         Ok(sockcan)
+    }
+
+    fn set_callback(&mut self, callback: Box<dyn SockCanCtrl>) {
+        self.callback = Some(RefCell::new(callback));
     }
 
     pub fn close(&self) {
@@ -469,7 +489,7 @@ impl SockCanHandle {
         Ok(self)
     }
 
-    pub fn set_recv_own(&mut self, loopback: bool) -> Result<&mut Self, CanError> {
+    pub fn set_loopback(&mut self, loopback: bool) -> Result<&mut Self, CanError> {
         let flag = if loopback { 1 } else { 0 };
         let status = unsafe {
             cglue::setsockopt(
@@ -481,7 +501,7 @@ impl SockCanHandle {
             )
         };
         if status < 0 {
-            return Err(CanError::new("can-recv-own-fail", cglue::get_perror()));
+            return Err(CanError::new("can-loopback-fail", cglue::get_perror()));
         }
         Ok(self)
     }
@@ -612,7 +632,12 @@ impl SockCanHandle {
 
         if msg_hdr.msg_namelen >= 8 {
             let canaddr = unsafe { &*(msg_hdr.msg_name as *const _ as *mut cglue::sockaddr_can) };
-            info.iface= canaddr.can_ifindex
+            info.iface = canaddr.can_ifindex
+        }
+
+        if info.count < 0 {
+            info.proto= CanProtoInfo::Error(CanError::new("can_read_frame",cglue::get_perror()));
+            return info
         }
 
         // ref: https://github.com/torvalds/linux/blob/master/tools/testing/selftests/net/timestamping.c
@@ -654,19 +679,25 @@ impl SockCanHandle {
 
                 cglue::can_J1939_x_SOL_CAN_J1939 => {
                     info.iface = canaddr.can_ifindex;
-                    info.proto.j1939.src.name = unsafe { canaddr.can_addr.j1939.name };
-                    info.proto.j1939.src.addr = unsafe { canaddr.can_addr.j1939.addr };
-                    info.proto.j1939.pgn = unsafe { canaddr.can_addr.j1939.pgn };
+                    let j1939_src= unsafe {CanJ1939Header {
+                            name: canaddr.can_addr.j1939.name,
+                            addr: canaddr.can_addr.j1939.addr
+                    }};
+
+                    let mut j1939_dst= CanJ1939Header {
+                        name:0,
+                        addr:0,
+                    };
 
                     match cmsg.cmsg_type as u32 {
                         cglue::can_J1939_x_SCM_DEST_ADDR => {
                             let addr = unsafe { &*(cglue::CMSG_DATA(cmsg) as *const _ as *mut u8) };
-                            info.proto.j1939.dst.addr = *addr;
+                            j1939_dst.addr = *addr;
                         }
                         cglue::can_J1939_x_SCM_DEST_NAME => {
                             let name =
                                 unsafe { &*(cglue::CMSG_DATA(cmsg) as *const _ as *mut u64) };
-                            info.proto.j1939.dst.name = *name;
+                            j1939_dst.name = *name;
                         }
                         // cglue::can_J1939_x_SCM_PRIO => {
                         //     let prio = unsafe { &*(cglue::CMSG_DATA(cmsg) as *const _ as *mut u8) };
@@ -674,7 +705,8 @@ impl SockCanHandle {
                         // }
                         _ => {}
                     }
-                }
+                    info.proto = CanProtoInfo::J1939(CanJ1939Info { src: j1939_src, dst: j1939_dst, pgn: unsafe{canaddr.can_addr.j1939.pgn} });
+                    }
                 _ => {}
             }
             cmsg = unsafe { &*cglue::CMSG_NXTHDR(&msg_hdr, cmsg) };

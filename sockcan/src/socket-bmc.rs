@@ -173,6 +173,7 @@ impl SockCanBmc for SockCanHandle {
 
         let mut sockcan = SockCanHandle {
             sockfd: sockfd,
+            callback: None,
             mode: SockCanMod::BCM,
         };
 

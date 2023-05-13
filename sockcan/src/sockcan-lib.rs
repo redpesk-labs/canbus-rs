@@ -12,6 +12,7 @@
     html_favicon_url = "https://iot.bzh/images/defaults/favicon.ico"
 )]
 extern crate bitflags;
+extern crate bitvec;
 
 #[cfg(feature = "serde")]
 extern crate serde;
@@ -30,7 +31,6 @@ mod sockbmc;
 
 #[path = "./socket-j1939.rs"]
 mod sockj1939;
-
 
 #[path = "./dbcpool-mod.rs"]
 mod dbcpool;
