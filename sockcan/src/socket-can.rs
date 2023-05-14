@@ -280,7 +280,7 @@ pub enum CanProtoInfo {
    J1939(CanJ1939Info),
    IsoTp(CanIsoTpInfo),
    Error(CanError),
-
+   Retry,
    None,
 }
 
@@ -299,7 +299,7 @@ pub enum SockCanOpCode {
     RxInvalid,
 }
 pub trait SockCanCtrl {
-    fn check_frame(&self, data: *const u8, info: &CanRecvInfo) -> SockCanOpCode;
+    fn check_frame(&self, data: &[u8], info: &CanRecvInfo) -> SockCanOpCode;
 }
 
 pub struct SockCanHandle {
@@ -582,7 +582,7 @@ impl SockCanHandle {
         Ok(self)
     }
 
-    pub fn get_raw_frame(&self) -> CanAnyFrame {
+    pub fn get_any_frame(&self) -> CanAnyFrame {
         #[allow(invalid_value)]
         let buffer: [u8; cglue::can_MTU_x_FD_MTU as usize] =
             unsafe { MaybeUninit::uninit().assume_init() };
@@ -603,8 +603,9 @@ impl SockCanHandle {
         }
     }
 
-    pub fn recv_can_msg(&self, buffer: *mut u8, size: u32) -> CanRecvInfo {
+    pub fn get_raw_frame(&self, buffer: &mut [u8]) -> CanRecvInfo {
         let mut info: CanRecvInfo = unsafe { mem::zeroed::<CanRecvInfo>() };
+        let size= buffer.len() as u32;
 
         let iovec = cglue::iovec {
             iov_base: buffer as *const _ as *mut std::ffi::c_void,
@@ -718,7 +719,7 @@ impl SockCanHandle {
         #[allow(invalid_value)]
         let mut buffer: [u8; cglue::can_MTU_x_FD_MTU as usize] =
             unsafe { MaybeUninit::uninit().assume_init() };
-        let info = self.recv_can_msg(buffer.as_mut_ptr(), cglue::can_MTU_x_FD_MTU);
+        let info = self.get_raw_frame(&mut buffer);
 
         let can_any_frame = if info.count == mem::size_of::<CanFrameRaw>() as isize {
             CanAnyFrame::from(&buffer as *const _ as *const CanFrameRaw)

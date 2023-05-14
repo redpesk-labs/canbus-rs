@@ -64,7 +64,7 @@ pub enum CanJ1939OpCode {
 
 pub struct SockJ1939Msg {
     pub info: CanRecvInfo,
-    pub frame: Vec<u8>,
+    pub frame: Option<Vec<u8>>,
 }
 
 impl SockJ1939Msg {
@@ -73,7 +73,7 @@ impl SockJ1939Msg {
     }
 
     pub fn get_opcode(&self) -> CanJ1939OpCode {
-        self.opcode.clone()
+        self.info.opcode.clone()
     }
 
     pub fn get_stamp(&self) -> u64 {
@@ -107,10 +107,17 @@ pub trait SockCanJ1939 {
         SockCanHandle: CanIFaceFrom<T>;
 
     fn get_j1939_frame(&self) -> SockJ1939Msg;
-    fn get_fast_frame(&self) -> SockJ1939Msg;
+    fn get_j1939_buffer(&self) -> [u8; cglue::can_J1939_x_MAX_TP_PACKET_SIZE as usize];
 }
 
-impl SockCanJ1939 for SockCanHandle {%
+impl SockCanJ1939 for SockCanHandle {
+    fn get_j1939_buffer(&self) -> [u8; cglue::can_J1939_x_MAX_TP_PACKET_SIZE as usize] {
+        #[allow(invalid_value)]
+        let mut buffer: [u8; cglue::can_J1939_x_MAX_TP_PACKET_SIZE as usize] =
+            unsafe { MaybeUninit::uninit().assume_init() };
+        buffer
+    }
+
     fn open_j1939<T>(
         candev: T,
         mode: SockJ1939Addr,
@@ -133,6 +140,7 @@ impl SockCanJ1939 for SockCanHandle {%
         let mut sockcan = SockCanHandle {
             sockfd: sockfd,
             mode: SockCanMod::J1939,
+            callback: None,
         };
 
         let iface = SockCanHandle::map_can_iface(sockfd, candev);
@@ -226,53 +234,61 @@ impl SockCanJ1939 for SockCanHandle {%
     }
 
     fn get_j1939_frame(&self) -> SockJ1939Msg {
-        let mut buffer: Vec<u8> =
-            Vec::with_capacity(cglue::can_J1939_x_MAX_TP_PACKET_SIZE as usize);
-        let info = self.recv_can_msg(
-            buffer.as_mut_ptr(),
-            cglue::can_J1939_x_MAX_TP_PACKET_SIZE as u32,
-        );
+        let mut frame = None;
+        let mut buffer: [u8; 8] = [0; 8];
 
+        // read raw frame from canbus
+        let mut info = self.get_raw_frame(&mut buffer);
         if info.count < 0 {
-                return SockJ1939Msg {
+            return SockJ1939Msg {
                 info: info,
-                frame: Vec::new(),
-            }
+                frame: frame,
+            };
         }
 
-        if let Some(callback) = self.callback {
-            match callback.try_borrow() {
-                Err(_) => info.proto= CanProtoInfo::Error(CanError::new("can-recv-callback","(internal) Fail to fet ref_mut".to_string())),
-                Ok(callback) => {
-                    match callback.new_frame(buffer.as_ptr(), info) {
-                        SockCanOpCode::RxRead(buffer) => {
+        let j1939_proto = match info.proto {
+            CanProtoInfo::J1939(proto) => proto,
+            _ => {
+                info.proto = CanProtoInfo::Error(CanError::new(
+                    "can-recv-callback",
+                    "(internal) not a j1939 frame".to_string(),
+                ));
+                return SockJ1939Msg {
+                    info: info,
+                    frame: frame,
+                };
+            }
+        };
 
-                        }
-                        SockCanOpCode::RxError(error) => {
-                            info.proto.error= CanProtoInfo::Error(error);
-                        }
-                        SockCanOpCode::RxPartial(_usize)=> {
-                            info.
-
-
-                        }
-                        _ => SockCanOpCode::RxInvalid,
+        let msg = if let Some(callback) = self.callback {
+            info.proto = match callback.try_borrow() {
+                Err(_) => CanProtoInfo::Error(CanError::new(
+                    "can-recv-callback",
+                    "(internal) Fail to fet ref_mut".to_string(),
+                )),
+                Ok(callback) => match callback.check_frame(&buffer, &info) {
+                    SockCanOpCode::RxRead(data) => {
+                        frame = Some(data);
+                        CanProtoInfo::J1939(j1939_proto)
                     }
-
-            }
-        }
-
-        if info.count > 0 {
-            unsafe { buffer.set_len(info.count as usize) };
+                    SockCanOpCode::RxError(error) => CanProtoInfo::Error(error),
+                    SockCanOpCode::RxPartial(_usize) => CanProtoInfo::Retry,
+                    _ => CanProtoInfo::Error(CanError::new(
+                        "can-recv-callback",
+                        "(internal) invalid callback status".to_string(),
+                    )),
+                },
+            };
             SockJ1939Msg {
                 info: info,
-                opcode: CanJ1939OpCode::RxRead,
-                frame: buffer,
+                frame: frame,
             }
         } else {
-
-    }
-}
+            SockJ1939Msg {
+                info: info,
+                frame: Some(buffer.to_vec()),
+            }
+        };
     }
 }
 
@@ -281,7 +297,7 @@ pub struct SockJ1939Fast {
     len: usize,
     index: usize,
     count: usize,
-    data: [u8; MAX_N2K_FAST_SZ],
+    data: Vec<u8>,
 }
 
 impl SockJ1939Fast {
@@ -291,7 +307,7 @@ impl SockJ1939Fast {
             len: len,
             index: 0,
             count: 0,
-            data: [0; MAX_N2K_FAST_SZ],
+            data: Vec::with_capacity(len),
         }
     }
 
@@ -300,125 +316,74 @@ impl SockJ1939Fast {
         self.count = 0;
     }
 
-    pub fn push(&mut self, buffer: *const u8) -> SockCanOpCode {
-        let data= unsafe {std::slice::from_raw_parts(buffer, 8)};
-
+    pub fn push(&mut self, buffer: &[u8]) -> SockCanOpCode {
         // first message has no index but len on 2 bytes
         if self.index == 0 {
-            self.len = self.data.view_bits::<Lsb0>()[0..16].load_le::<u16>() as usize;
+            // check packet len fit PGN description
+            let len = self.data.view_bits::<Lsb0>()[0..16].load_le::<u16>() as usize;
+            if self.len != len {
+                return SockCanOpCode::RxError(CanError::new(
+                    "j1939-fastpkg-pgnlen",
+                    format!("message pgn:{} len:{} found:{}", self.pgn, self.len, len),
+                ));
+            }
 
             for idx in 2..8 {
-                self.data[self.count] = data[idx];
+                self.data[self.count] = buffer[idx];
                 self.count += 1;
             }
             self.index = 1;
         } else {
             if self.index != self.data.view_bits::<Lsb0>()[0..8].load_le::<u8>() as usize {
-                return SockCanOpCode::RxError(CanError::new("j1939-fastpkg-sequence", "message sequence ordering broken"));
+                return SockCanOpCode::RxError(CanError::new(
+                    "j1939-fastpkg-sequence",
+                    "message sequence ordering broken",
+                ));
             }
 
             for idx in 1..8 {
-                self.data[self.count] = data[idx];
+                self.data[self.count] = buffer[idx];
                 self.count += 1;
                 if self.count == self.len {
                     self.reset();
-                    let data= self.data.chunks_exact(self.count).next().unwrap();
-                    return SockCanOpCode::RxRead(data.to_vec());
+                    return SockCanOpCode::RxRead(self.data.clone());
                 }
             }
             self.index += 1;
         };
-        SockCanOpCode::RxPartial(self.index-1)
+        SockCanOpCode::RxPartial(self.index - 1)
     }
 }
 
-pub struct SockJ1939Filter {
+pub struct SockJ1939Filters {
     filter: Vec<cglue::j1939_filter>,
     fastpkg: Vec<RefCell<SockJ1939Fast>>,
 }
 
-    // NMEA2000 does not use J1939 TP mechanism but in place have a custom FastPacket protocol
-    // Reference: https://canboat.github.io/canboat/canboat.html#pgn-126976
-    // this protocol uses standard 8 byte frames, with following data usage
-    // 1st packet: DATA[8]= LEN[2]+DATA[6] 2nd,... DATA[8]=IDX[1],DATA[7]  (max 32 packets)
-    // note: packet should be read in sequence or read fail
-impl SockCanCtrl for SockJ1939Filter {
-    fn check_frame (&self, data: *const u8, recv: &CanRecvInfo) -> SockCanOpCode {
-
-        let info= match recv.proto {
-            CanProtoInfo::J1939(info) => {info}
-            _ => {return SockCanOpCode::RxInvalid}
+// NMEA2000 does not use J1939 TP mechanism but in place have a custom FastPacket protocol
+// Reference: https://canboat.github.io/canboat/canboat.html#pgn-126976
+// this protocol uses standard 8 byte frames, with following data usage
+// 1st packet: DATA[8]= LEN[2]+DATA[6] 2nd,... DATA[8]=IDX[1],DATA[7]  (max 32 packets)
+// note: packet should be read in sequence or read fail
+impl SockCanCtrl for SockJ1939Filters {
+    fn check_frame(&self, data: &[u8], recv: &CanRecvInfo) -> SockCanOpCode {
+        let info = match recv.proto {
+            CanProtoInfo::J1939(info) => info,
+            _ => return SockCanOpCode::RxInvalid,
         };
 
-        // if not a register fast packet ignorese
-        let fastpkg= match self.search_pgn(info.pgn) {
-            Err(error) => return SockCanOpCode::RxError(error),
-            Ok(value) => value,
-        };
-
-        fastpkg.push(data);
-
-        let mut fast_data: Vec<u8> = Vec::with_capacity(MAX_N2K_FAST_SZ);
-
-        #[allow(invalid_value)]
-        let mut buffer: [u8; MAX_N2K_PACK_SZ] = unsafe { MaybeUninit::uninit().assume_init() };
-
-        let info = self.recv_can_msg(buffer.as_mut_ptr(), MAX_N2K_PACK_SZ as u32);
-        if info.count < 0 {
-            return SockJ1939Msg {
-                info: info,
-                opcode: CanJ1939OpCode::RxError,
-                frame: Vec::new(),
-            };
-        };
-
-        // extract data len from 1st packet
-        let length = buffer.view_bits::<Lsb0>()[0..16].load_le::<u16>();
-        let mut count = length as usize;
-        for idx in 2..7 {
-            fast_data.push(buffer[idx]);
-            count -= 1;
-            if count == 0 {
-                break;
-            };
+        // if fast packet process partial msg, else return data
+        match self.search_pgn(info.pgn) {
+            Err(error) => SockCanOpCode::RxRead(data.to_vec()),
+            Ok(mut fast) => fast.push(data),
         }
-
-        let mut index = 1;
-        while count > 0 {
-            let info = self.recv_can_msg(buffer.as_mut_ptr(), MAX_N2K_PACK_SZ as u32);
-            if info.count < 0 || index != buffer.view_bits::<Lsb0>()[0..8].load_le::<u8>() {
-                return SockJ1939Msg {
-                    info: info,
-                    opcode: CanJ1939OpCode::RxError,
-                    frame: Vec::new(),
-                };
-            };
-
-            for idx in 1..7 {
-                fast_data.push(buffer[idx]);
-                count -= 1;
-                if count == 0 {
-                    break;
-                };
-            }
-            index += 1;
-        }
-
-        unsafe { fast_data.set_len(length as usize) };
-        SockJ1939Msg {
-            info: info,
-            opcode: CanJ1939OpCode::RxError,
-            frame: fast_data,
-        };
-    SockCanOpCode::RxIgnore
     }
+}
 
-    }
-
-impl SockJ1939Filter {
+impl SockJ1939Filters {
     pub fn new() -> Self {
         // J1939 filter have at least one filter
-        SockJ1939Filter {
+        SockJ1939Filters {
             filter: Vec::new(),
             fastpkg: Vec::new(),
         }
@@ -445,7 +410,10 @@ impl SockJ1939Filter {
             .binary_search_by(|pkg| pkg.borrow().pgn.cmp(&pgn));
         match search {
             Ok(idx) => match self.fastpkg[idx].try_borrow_mut() {
-                Err(_code) => Err(CanError::new("message-get_mut", "internal fastpkg pool error")),
+                Err(_code) => Err(CanError::new(
+                    "message-get_mut",
+                    "internal fastpkg pool error",
+                )),
                 Ok(mut_ref) => Ok(mut_ref),
             },
             Err(_) => Err(CanError::new(

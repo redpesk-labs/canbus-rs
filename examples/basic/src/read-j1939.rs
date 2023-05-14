@@ -25,8 +25,8 @@ fn main() -> Result<(), String> {
     };
 
     // when using basic/etc/start-pgn129285.sh
-    match SockJ1939Filter::new()
-         .add_fast(129285)
+    match SockJ1939Filters::new()
+         .add_fast(129285, 10) // canboat pgn "navigationRouteWpInformation"
          .apply(&sock)
     {
          Err(error) => panic!("j1939-filter fail Error:{}", error.to_string()),
@@ -37,10 +37,11 @@ fn main() -> Result<(), String> {
     // sock.set_blocking(true).expect("Fail to set block mode");
     println!("sockj1939 waiting for packet");
     let mut count = 0;
+    let mut buffer= sock.get_j1939_buffer();
     loop {
         count += 1;
 
-        let frame = sock.get_j1939_frame();
+        let frame = sock.get_j1939_frame(&buffer);
         match frame.get_opcode() {
             CanJ1939OpCode::RxRead => println!(
                 "{:4} J1939 pgn:{:#04x}({}) stamp:{} len:{} data:{:?}",
