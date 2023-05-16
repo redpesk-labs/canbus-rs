@@ -306,7 +306,7 @@ impl SockJ1939Fast {
         self.data.clear();
     }
 
-    pub fn push(&mut self, buffer: &[u8], len: isize) -> SockCanOpCode {
+    pub fn push(&mut self, buffer: &[u8], _len: isize) -> SockCanOpCode {
 
         //println!("buffer: {:#02x?}:{:#02x?}  len:{}", buffer[0], buffer[1],len);
 
