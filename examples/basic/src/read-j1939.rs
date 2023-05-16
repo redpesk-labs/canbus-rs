@@ -28,7 +28,7 @@ fn main() -> Result<(), String> {
     // when using basic/etc/start-pgn129285.sh
     let mut filters = SockJ1939Filters::new();
     match filters
-        .add_fast(129285, 10) // canboat pgn "navigationRouteWpInformation"
+        .add_fast(129285, 10, 128) // canboat pgn "navigationRouteWpInformation"
         .apply(&sock)
     {
         Err(error) => panic!("j1939-filter fail Error:{}", error.to_string()),
@@ -50,7 +50,7 @@ fn main() -> Result<(), String> {
         let frame = sock.get_j1939_frame();
         match frame.get_opcode() {
             SockCanOpCode::RxRead(_data) => println!(
-                "{:4} J1939 pgn:{:#04x}({}) stamp:{} len:{} data:{:?}",
+                "({:4}) J1939 pgn:{:#04x}({}) stamp:{} len:{} data:{:x?}",
                 count,
                 frame.get_pgn(),
                 frame.get_pgn(),
@@ -58,9 +58,11 @@ fn main() -> Result<(), String> {
                 frame.get_len(),
                 frame.get_data(),
             ),
-            SockCanOpCode::RxError(error) => return Err(error.to_string()),
+            SockCanOpCode::RxError(error) => {
+                println!("{}", error)
+            }
             // if packet is partial just silently ignore it
-            _ => continue,
+            _ => {},
         };
     }
 }

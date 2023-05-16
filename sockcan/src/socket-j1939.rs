@@ -20,9 +20,9 @@ use crate::prelude::*;
 use std::cell::{RefCell, RefMut};
 use std::mem::{self, MaybeUninit};
 
-const _MAX_N2K_FAST_SZ: usize = 223; // Max N2K data with 32 packets
-const _MAX_N2K_PACK_SZ: usize = 8; // Individual packet are 8 bytes
-const MAX_J1939_PKG_SZ: usize = cglue::can_J1939_x_MAX_TP_PACKET_SIZE as usize;
+const MAX_N2K_FAST_SZ: u16 = 223; // Max N2K data with 32 packets
+const MAX_N2K_PACK_SZ: isize = 8; // Individual packet are 8 bytes
+const MAX_J1939_PKG_SZ: u16 = cglue::can_J1939_x_MAX_TP_PACKET_SIZE as u16;
 
 pub struct SockJ1939Ecu {
     name: u64,
@@ -151,7 +151,7 @@ impl SockCanJ1939 for SockCanHandle {
         #[allow(invalid_value)]
         let mut canaddr: cglue::sockaddr_can = unsafe { MaybeUninit::uninit().assume_init() };
         canaddr.can_family = cglue::can_SOCK_x_AF_CAN as u16;
-        canaddr.can_ifframe_idx = iface;
+        canaddr.can_ifindex = iface;
 
         match mode {
             SockJ1939Addr::Promiscuous => {
@@ -235,7 +235,7 @@ impl SockCanJ1939 for SockCanHandle {
 
     fn get_j1939_frame(&self) -> SockJ1939Msg {
         #[allow(invalid_value)]
-        let mut buffer: [u8; MAX_J1939_PKG_SZ] = unsafe { MaybeUninit::uninit().assume_init() };
+        let mut buffer: [u8; MAX_J1939_PKG_SZ as usize] = unsafe { MaybeUninit::uninit().assume_init() };
 
         // read raw frame from canbus
         let info = self.get_raw_frame(&mut buffer);
@@ -279,16 +279,16 @@ pub struct SockJ1939Fast {
     frame_idx: u8,   // current chunk index
     frame_count: u8, // current frame frame_count number
     frame_len: u16,  // data to be read
-    data_idx: usize, // data index
     data: Vec<u8>,   // data buffer
+    capacity: u16,   // data maximum capacity
 }
 
 impl SockJ1939Fast {
-    pub fn new(pgn: u32, dbc_len: i32) -> Self {
-        let capacity = if dbc_len < 0 {
-            MAX_J1939_PKG_SZ
-        } else {
-            dbc_len as usize
+    pub fn new(pgn: u32, dbc_len: u16, mut capacity: u16) -> Self {
+        if capacity == 0 {
+            capacity = dbc_len
+        } else if capacity > MAX_J1939_PKG_SZ {
+            capacity = MAX_N2K_FAST_SZ
         };
 
         SockJ1939Fast {
@@ -296,36 +296,47 @@ impl SockJ1939Fast {
             frame_idx: 0,
             frame_count: 0,
             frame_len: 0,
-            data_idx: 0,
-            data: Vec::with_capacity(capacity),
+            capacity: capacity,
+            data: Vec::with_capacity(capacity as usize),
         }
     }
 
     pub fn reset(&mut self) {
         self.frame_idx = 0;
-        self.data_idx = 0;
+        self.data.clear();
     }
 
-    pub fn push(&mut self, buffer: &[u8]) -> SockCanOpCode {
-        println!("buffer: {:#04x}:{:#04x}", buffer[0], buffer[1]);
+    pub fn push(&mut self, buffer: &[u8], len: isize) -> SockCanOpCode {
+
+        //println!("buffer: {:#02x?}:{:#02x?}  len:{}", buffer[0], buffer[1],len);
 
         // first message has no frame_idx but len on 2 bytes
-        if self.frame_idx == 0 {
+        if  (buffer[0] & 0x0F) == 0 {
             // numero serial number is coded on initial 4 bits of the message
             self.frame_count = buffer[0] >> 4;
 
+            // previous message we uncompleted
+            if self.data.len() > 0 {
+                println!("-- data lost: frame_len:{} data_len:{}", self.frame_len, self.data.len());
+                self.reset();
+            }
+
             // check packet len fit PGN description
-            self.frame_len = ((buffer[0] & 0x0f) as u16 * 256 + buffer[1] as u16);
-            if (self.frame_len as usize > self.data.len()){
+            self.frame_len = buffer[1] as u16;
+            if self.frame_len > self.capacity {
                 return SockCanOpCode::RxError(CanError::new(
                     "j1939-fastpkg-pgnlen",
-                    format!("message pgn:{} len:{} bigger than capacity: {}", self.pgn, self.frame_len, self.data.len()),
+                    format!(
+                        "message pgn:{} len:{} bigger than capacity: {}",
+                        self.pgn,
+                        self.frame_len,
+                        self.data.len()
+                    ),
                 ));
             }
 
             for idx in 2..8 {
-                self.data[self.data_idx] = buffer[idx];
-                self.data_idx += 1;
+                self.data.push(buffer[idx]);
             }
             self.frame_idx = 1;
         } else {
@@ -333,16 +344,16 @@ impl SockJ1939Fast {
                 self.reset();
                 return SockCanOpCode::RxError(CanError::new(
                     "j1939-fastpkg-sequence",
-                    "message sequence ordering broken",
+                    format!("pgn:{} message sequence ordering broken", self.pgn),
                 ));
             }
 
             for idx in 1..8 {
-                self.data[self.size] = buffer[idx];
-                self.size += 1;
-                if self.size == self.data.len() {
+                self.data.push(buffer[idx]);
+                if self.frame_len as usize == self.data.len() {
+                    let response= SockCanOpCode::RxRead(self.data.clone());
                     self.reset();
-                    return SockCanOpCode::RxRead(self.data.clone());
+                    return response;
                 }
             }
             self.frame_idx += 1;
@@ -368,10 +379,15 @@ impl SockCanCtrl for SockJ1939Filters {
             _ => return SockCanOpCode::RxInvalid,
         };
 
+        // fast packet should be 8 bytes long
+        if recv.count > MAX_N2K_PACK_SZ {
+            return SockCanOpCode::RxInvalid;
+        }
+
         match self.search_pgn(info.pgn) {
             // if fast packet process partial data, else return msg data as it
             Err(_error) => SockCanOpCode::RxRead(data.to_vec()),
-            Ok(mut fast) => fast.push(data),
+            Ok(mut fast) => fast.push(data, recv.count),
         }
     }
 }
@@ -397,9 +413,9 @@ impl SockJ1939Filters {
         self
     }
 
-    pub fn add_fast(&mut self, pgn: u32, len: usize) -> &mut Self {
+    pub fn add_fast(&mut self, pgn: u32, dbc_len: u16, capacity: u16) -> &mut Self {
         self.fastpkg
-            .push(RefCell::new(SockJ1939Fast::new(pgn, len)));
+            .push(RefCell::new(SockJ1939Fast::new(pgn, dbc_len, capacity)));
         self.add_pgn(pgn);
         self
     }
