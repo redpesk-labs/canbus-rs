@@ -291,10 +291,12 @@ pub struct CanRecvInfo {
     pub count: isize,
     pub iface: i32,
 }
+
+#[derive(Clone)]
 pub enum SockCanOpCode {
     RxRead(Vec<u8>),
     RxError(CanError),
-    RxPartial(usize),
+    RxPartial(u8),
     RxIgnore,
     RxInvalid,
 }
@@ -396,7 +398,7 @@ impl SockCanHandle {
         Ok(sockcan)
     }
 
-    fn set_callback(&mut self, callback: Box<dyn SockCanCtrl>) {
+    pub fn set_callback(&mut self, callback: Box<dyn SockCanCtrl>) {
         self.callback = Some(RefCell::new(callback));
     }
 

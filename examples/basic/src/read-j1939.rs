@@ -19,31 +19,37 @@ fn main() -> Result<(), String> {
     const VCAN: &str = "vcan0";
 
     // open j1939 in promiscuous mode
-    let sock = match SockCanHandle::open_j1939(VCAN, SockJ1939Addr::Promiscuous, CanTimeStamp::CLASSIC) {
-        Err(error) => return Err(format!("fail opening candev {}", error.to_string())),
-        Ok(value) => value,
-    };
+    let mut sock =
+        match SockCanHandle::open_j1939(VCAN, SockJ1939Addr::Promiscuous, CanTimeStamp::CLASSIC) {
+            Err(error) => return Err(format!("fail opening candev {}", error.to_string())),
+            Ok(value) => value,
+        };
 
     // when using basic/etc/start-pgn129285.sh
-    match SockJ1939Filters::new()
-         .add_fast(129285, 10) // canboat pgn "navigationRouteWpInformation"
-         .apply(&sock)
+    let mut filters = SockJ1939Filters::new();
+    match filters
+        .add_fast(129285, 10) // canboat pgn "navigationRouteWpInformation"
+        .apply(&sock)
     {
-         Err(error) => panic!("j1939-filter fail Error:{}", error.to_string()),
-         Ok(()) => println!("sockj1939 filter PGN=129285 ready"),
+        Err(error) => panic!("j1939-filter fail Error:{}", error.to_string()),
+        Ok(()) => println!("sockj1939 filter PGN=129285 ready"),
+    }
+
+    // register NMEA user land fast packet protocol on top of J1939
+    if filters.get_fastlen() > 0 {
+        sock.set_callback(Box::new(filters));
     }
 
     // choose blocking/non blocking mode [default blocking]
     // sock.set_blocking(true).expect("Fail to set block mode");
     println!("sockj1939 waiting for packet");
     let mut count = 0;
-    let mut buffer= sock.get_j1939_buffer();
     loop {
         count += 1;
 
-        let frame = sock.get_j1939_frame(&buffer);
+        let frame = sock.get_j1939_frame();
         match frame.get_opcode() {
-            CanJ1939OpCode::RxRead => println!(
+            SockCanOpCode::RxRead(_data) => println!(
                 "{:4} J1939 pgn:{:#04x}({}) stamp:{} len:{} data:{:?}",
                 count,
                 frame.get_pgn(),
@@ -52,12 +58,9 @@ fn main() -> Result<(), String> {
                 frame.get_len(),
                 frame.get_data(),
             ),
-            CanJ1939OpCode::RxPartial => {
-                continue;
-            }
-            CanJ1939OpCode::RxError => {
-                return Err(format!("unsupported j1939 opcode:{:?}", frame.get_opcode()))
-            }
+            SockCanOpCode::RxError(error) => return Err(error.to_string()),
+            // if packet is partial just silently ignore it
+            _ => continue,
         };
     }
 }

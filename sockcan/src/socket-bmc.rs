@@ -189,7 +189,7 @@ impl SockCanBmc for SockCanHandle {
         #[allow(invalid_value)]
         let mut buffer: [u8; mem::size_of::<CanFdBcmOneMsg>()] =
             unsafe { MaybeUninit::uninit().assume_init() };
-        let info = self.get_raw_frame(&buffer);
+        let info = self.get_raw_frame(&mut buffer);
         let one_msg = unsafe { &*(&buffer as *const _ as *const CanBcmOneMsg) };
 
         let can_any_frame = if info.count == mem::size_of::<CanBcmOneMsg>() as isize {
