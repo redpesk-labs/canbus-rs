@@ -32,7 +32,6 @@ fn main() {
         .header("src/capi/sockcan-map.h")
         .raw_line(header)
         // default wrapper config
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .derive_debug(false)
         .layout_tests(false)
         .allowlist_function("can_.*")
