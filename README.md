@@ -4,6 +4,7 @@
 Following libraries/crates interfaces can-socket Linux Kernel capabilities with Rust world.
 
 Current version supports:
+
 * dbc-file parsing and code generator with optional canid white/black list
 * raw-can for std+FD frames with optional 'by canid' filters
 * bmc-socket with full options (timeout, watchdog, mask, ...)
@@ -15,16 +16,19 @@ Current version supports:
     * native integration with socket-bmc for timeout,watchdog,...
 
 Under development feature (may run until summer-2023)
+
  * ISOTP/J1939 integration with linux kernel modules
  * NMEA 2000
  * Rest/worksocket API through redpesk/AFB bindings
  * integration with Kuksa-databroker
 
 WARNING:
+
  * canrus-rs should remain under heavy work until end of spring-2023
  * dbc definition quickly generate huge rust parser rust code (use parser white list to reduce size)
 
 Community Support:
+
 * https://matrix.to/#/#redpesk-core:matrix.org
 * please keep github only for push request
 
@@ -58,9 +62,10 @@ size of generate code.
 ```
 git clone https://github.com/redpesk-labs/canbus-rs
 cd canbus-rs
-touch touch examples/dbc-log/*.dbc // force dbc parser regeneration
+touch examples/dbc-log/*.dbc // force dbc parser regeneration
 cargo build
 ```
+
 ## Install VCAN
 
 To simulate CAN message injection, you need a vcan device
@@ -79,9 +84,10 @@ ip addr | grep "can"  ;# check interface is up
     * apt-get install can-utils;  dnf install can-utils; zypper install can-utils;
     * canplayer vcan0=elmcan -v -I examples/demo/etc/candump/model3.log -l i -g 10
 
-* start can-display
-```
-[fulup@fulup-laptop canbus-rs]$ ~/.cargo/build/debug/can-display vcan0 500
+* start can-model3
+
+```bash
+[canbus-rs]$ ${CARGO_TARGET_DIR:-./target}/debug/can-model3 vcan0 500
 (1) => CanID:280 opcode:RxChanged stamp:1681732233413819
   -- DiAccelPedalPos           value:30.400   (f64) status:Updated age:0
   -- DiBrakePedalState         value:0         (u8) status:Unchanged age:0
@@ -89,7 +95,7 @@ ip addr | grep "can"  ;# check interface is up
   ...
 ```
 
-![can-display](docs/asset/can-display-demo.png)
+![can-model3](docs/asset/can-model3-demo.png)
 
 
 Fulup:
