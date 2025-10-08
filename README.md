@@ -15,7 +15,7 @@ Current version supports:
     * signal value cache with status and time stamp
     * native integration with socket-bmc for timeout,watchdog,...
 
-Under development feature (may run until summer-2023)
+Under development feature (may run until summer-2026)
 
  * ISOTP/J1939 integration with linux kernel modules
  * Rest/worksocket API through redpesk/AFB bindings
@@ -23,7 +23,7 @@ Under development feature (may run until summer-2023)
 
 WARNING:
 
- * canrus-rs should remain under heavy work until end of spring-2023
+ * canrus-rs should remain under heavy work until end of spring-2026
  * dbc definition quickly generate huge rust parser rust code (use parser white list to reduce size)
 
 Community Support:
