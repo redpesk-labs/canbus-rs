@@ -18,7 +18,6 @@ Current version supports:
 Under development feature (may run until summer-2023)
 
  * ISOTP/J1939 integration with linux kernel modules
- * NMEA 2000
  * Rest/worksocket API through redpesk/AFB bindings
  * integration with Kuksa-databroker
 
@@ -101,8 +100,6 @@ ip addr | grep "can"  ;# check interface is up
 Fulup:
 
 - implementer isotp
-- parser les json N2K
-- n2k fast packet
 
 
 

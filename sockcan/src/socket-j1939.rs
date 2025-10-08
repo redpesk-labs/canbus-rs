@@ -11,7 +11,6 @@
  *    https://gitlab.cern.ch/atlas-dcs-common-software/socketcan-utils/blob/8839679a4cf19a0c44c207b61683b2a707779a6e/can-j1939-kickstart.md
  *    https://github.com/linux-can/can-utils/blob/master/testj1939.c
  *    https://www.engr.colostate.edu/~jdaily/J1939/candata.html
- *    https://www.csselectronics.com/pages/nmea-2000-n2k-intro-tutorial#fast-packet
  *
 */
 
