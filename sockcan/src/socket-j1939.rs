@@ -30,9 +30,10 @@ pub struct SockJ1939Ecu {
 }
 
 impl SockJ1939Ecu {
+    #[must_use]
     pub fn new(name: u64) -> Self {
         SockJ1939Ecu {
-            name: name,
+            name,
             pgn: cglue::can_J1939_x_NO_PGN,
             addr: cglue::can_J1939_x_NO_ADDR as u8,
         }
@@ -60,28 +61,41 @@ pub struct SockJ1939Msg {
 }
 
 impl SockJ1939Msg {
+    #[must_use]
     pub fn get_iface(&self) -> i32 {
         self.info.iface
     }
 
+    #[must_use]
     pub fn get_opcode(&self) -> SockCanOpCode {
         self.opcode.clone()
     }
 
+    #[must_use]
     pub fn get_stamp(&self) -> u64 {
         self.info.stamp
     }
-
+    /// Extracts high-level J1939 metadata (e.g., source address, PGN, priority,
+    /// and timestamp) from this received message.
+    ///
+    /// # Returns
+    /// A `CanJ1939Info` structure containing decoded header fields and any
+    /// associated metadata.
+    ///
+    /// # Errors
+    /// Returns a `CanError` if:
+    /// - the underlying buffer is shorter than the minimum J1939 header size;
+    /// - the PGN or address fields cannot be decoded (e.g., invalid bit layout);
+    /// - integer conversions overflow/underflow or violate expected ranges;
+    /// - required timestamp or ancillary data is missing or inconsistent.
     pub fn get_info(&self) -> Result<CanJ1939Info, CanError> {
         match self.info.proto {
             CanProtoInfo::J1939(info) => Ok(info),
-            _ => Err(CanError::new(
-                "sockj1939-msg-invalid",
-                "No J1939 info within this message",
-            )),
+            _ => Err(CanError::new("sockj1939-msg-invalid", "No J1939 info within this message")),
         }
     }
 
+    #[must_use]
     pub fn get_pgn(&self) -> u32 {
         match self.info.proto {
             CanProtoInfo::J1939(info) => info.pgn,
@@ -89,6 +103,7 @@ impl SockJ1939Msg {
         }
     }
 
+    #[must_use]
     pub fn get_len(&self) -> usize {
         match &self.opcode {
             SockCanOpCode::RxRead(data) => data.len(),
@@ -96,6 +111,7 @@ impl SockJ1939Msg {
         }
     }
 
+    #[must_use]
     pub fn get_data<'a>(&'a self) -> &'a [u8] {
         match &self.opcode {
             SockCanOpCode::RxRead(data) => data.as_slice(),
@@ -105,6 +121,24 @@ impl SockJ1939Msg {
 }
 
 pub trait SockCanJ1939 {
+    /// Opens a J1939 socket on the given CAN interface with the requested addressing mode
+    /// and timestamp configuration.
+    ///
+    /// # Parameters
+    /// - `candev`: Interface identifier (e.g., `"can0"` or an index) convertible via `CanIFaceFrom<T>`.
+    /// - `mode`: J1939 addressing mode (e.g., ECU/broadcast/unicast parameters).
+    /// - `timestamp`: Desired timestamping mode for received frames.
+    ///
+    /// # Returns
+    /// A configured `SockCanHandle` ready for J1939 operations.
+    ///
+    /// # Errors
+    /// Returns a `CanError` if:
+    /// - the socket cannot be created (e.g., `socket()` fails or the protocol is unsupported);
+    /// - binding the socket to the interface/address fails (invalid interface, permission error, or OS-level failure);
+    /// - requested options (e.g., timestamping, broadcast/promiscuous flags) cannot be applied (`setsockopt` failure);
+    /// - conversions/validations of lengths, pointers, or numeric casts fail;
+    /// - `candev` cannot be converted by the `CanIFaceFrom<T>` implementation.
     fn open_j1939<T>(
         candev: T,
         mode: SockJ1939Addr,
@@ -136,11 +170,7 @@ impl SockCanJ1939 for SockCanHandle {
             return Err(CanError::new("fail-socketcan-open", cglue::get_perror()));
         }
 
-        let mut sockcan = SockCanHandle {
-            sockfd: sockfd,
-            mode: SockCanMod::J1939,
-            callback: None,
-        };
+        let mut sockcan = SockCanHandle { sockfd, mode: SockCanMod::J1939, callback: None };
 
         let iface = SockCanHandle::map_can_iface(sockfd, candev);
         if iface < 0 {
@@ -166,10 +196,7 @@ impl SockCanJ1939 for SockCanHandle {
                 };
 
                 if status < 0 {
-                    return Err(CanError::new(
-                        "fail-sockj1939-promiscuous",
-                        cglue::get_perror(),
-                    ));
+                    return Err(CanError::new("fail-sockj1939-promiscuous", cglue::get_perror()));
                 }
 
                 canaddr.can_addr.j1939 = cglue::sockaddr_can__bindgen_ty_1__bindgen_ty_2 {
@@ -194,10 +221,7 @@ impl SockCanJ1939 for SockCanHandle {
                     };
 
                     if status < 0 {
-                        return Err(CanError::new(
-                            "fail-sockj1939-broadcast",
-                            cglue::get_perror(),
-                        ));
+                        return Err(CanError::new("fail-sockj1939-broadcast", cglue::get_perror()));
                     }
                 }
 
@@ -214,11 +238,7 @@ impl SockCanJ1939 for SockCanHandle {
         };
 
         let status = unsafe {
-            cglue::bind(
-                sockfd,
-                sockaddr,
-                mem::size_of::<cglue::sockaddr_can>() as cglue::socklen_t,
-            )
+            cglue::bind(sockfd, sockaddr, mem::size_of::<cglue::sockaddr_can>() as cglue::socklen_t)
         };
         if status < 0 {
             return Err(CanError::new("fail-sockj1939-bind", cglue::get_perror()));
@@ -234,13 +254,14 @@ impl SockCanJ1939 for SockCanHandle {
 
     fn get_j1939_frame(&self) -> SockJ1939Msg {
         #[allow(invalid_value)]
-        let mut buffer: [u8; MAX_J1939_PKG_SZ as usize] = unsafe { MaybeUninit::uninit().assume_init() };
+        let mut buffer: [u8; MAX_J1939_PKG_SZ as usize] =
+            unsafe { MaybeUninit::uninit().assume_init() };
 
         // read raw frame from canbus
         let info = self.get_raw_frame(&mut buffer);
         if info.count < 0 {
             return SockJ1939Msg {
-                info: info,
+                info,
                 opcode: SockCanOpCode::RxError(CanError::new(
                     "j1939-read-fail",
                     "fail to read message from canbus",
@@ -257,18 +278,12 @@ impl SockCanJ1939 for SockCanHandle {
                 )),
                 Ok(callback) => callback.check_frame(&buffer, &info),
             };
-            SockJ1939Msg {
-                info: info,
-                opcode: opcode,
-            }
+            SockJ1939Msg { info, opcode }
         } else {
             // in j1939 message len can be anything from 1 to
             let mut data = buffer.to_vec();
             data.truncate(info.count as usize);
-            SockJ1939Msg {
-                info: info,
-                opcode: SockCanOpCode::RxRead(data),
-            }
+            SockJ1939Msg { info, opcode: SockCanOpCode::RxRead(data) }
         }
     }
 }
@@ -283,19 +298,20 @@ pub struct SockJ1939Fast {
 }
 
 impl SockJ1939Fast {
+    #[must_use]
     pub fn new(pgn: u32, dbc_len: u16, mut capacity: u16) -> Self {
         if capacity == 0 {
             capacity = dbc_len
         } else if capacity > MAX_J1939_PKG_SZ {
-            capacity = MAX_N2K_FAST_SZ
+            capacity = MAX_N2K_FAST_SZ;
         };
 
         SockJ1939Fast {
-            pgn: pgn,
+            pgn,
             frame_idx: 0,
             frame_count: 0,
             frame_len: 0,
-            capacity: capacity,
+            capacity,
             data: Vec::with_capacity(capacity as usize),
         }
     }
@@ -306,22 +322,21 @@ impl SockJ1939Fast {
     }
 
     pub fn push(&mut self, buffer: &[u8], _len: isize) -> SockCanOpCode {
-
         //println!("buffer: {:#02x?}:{:#02x?}  len:{}", buffer[0], buffer[1],len);
 
         // first message has no frame_idx but len on 2 bytes
-        if  (buffer[0] & 0x0F) == 0 {
+        if buffer[0].trailing_zeros() >= 4 {
             // numero serial number is coded on initial 4 bits of the message
             self.frame_count = buffer[0] >> 4;
 
             // previous message we uncompleted
-            if self.data.len() > 0 {
+            if !self.data.is_empty() {
                 println!("-- data lost: frame_len:{} data_len:{}", self.frame_len, self.data.len());
                 self.reset();
             }
 
             // check packet len fit PGN description
-            self.frame_len = buffer[1] as u16;
+            self.frame_len = u16::from(buffer[1]);
             if self.frame_len > self.capacity {
                 return SockCanOpCode::RxError(CanError::new(
                     "j1939-fastpkg-pgnlen",
@@ -350,13 +365,13 @@ impl SockJ1939Fast {
             for idx in 1..8 {
                 self.data.push(buffer[idx]);
                 if self.frame_len as usize == self.data.len() {
-                    let response= SockCanOpCode::RxRead(self.data.clone());
+                    let response = SockCanOpCode::RxRead(self.data.clone());
                     self.reset();
                     return response;
                 }
             }
             self.frame_idx += 1;
-        };
+        }
         SockCanOpCode::RxPartial(self.frame_idx)
     }
 }
@@ -391,15 +406,20 @@ impl SockCanCtrl for SockJ1939Filters {
     }
 }
 
+impl Default for SockJ1939Filters {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SockJ1939Filters {
+    #[must_use]
     pub fn new() -> Self {
         // J1939 filter have at least one filter
-        SockJ1939Filters {
-            filter: Vec::new(),
-            fastpkg: Vec::new(),
-        }
+        SockJ1939Filters { filter: Vec::new(), fastpkg: Vec::new() }
     }
 
+    #[must_use]
     pub fn get_fastlen(&self) -> usize {
         self.fastpkg.len()
     }
@@ -413,28 +433,34 @@ impl SockJ1939Filters {
     }
 
     pub fn add_fast(&mut self, pgn: u32, dbc_len: u16, capacity: u16) -> &mut Self {
-        self.fastpkg
-            .push(RefCell::new(SockJ1939Fast::new(pgn, dbc_len, capacity)));
+        self.fastpkg.push(RefCell::new(SockJ1939Fast::new(pgn, dbc_len, capacity)));
         self.add_pgn(pgn);
         self
     }
-
+    /// Searches the internal PGN map and returns a mutable handle to the
+    /// fast-path entry for the given Parameter Group Number (PGN).
+    ///
+    /// # Parameters
+    /// - `pgn`: The J1939 Parameter Group Number to look up.
+    ///
+    /// # Returns
+    /// A `RefMut<'_, SockJ1939Fast>` giving mutable access to the cached
+    /// fast-path data associated with `pgn`.
+    ///
+    /// # Errors
+    /// Returns a `CanError` if:
+    /// - the `pgn` is unknown or not present in the pool;
+    /// - the internal map/index is not initialized or corrupted;
+    /// - there is an outstanding borrow that prevents acquiring a mutable
+    ///   reference (e.g., `RefCell` borrow conflict).
     pub fn search_pgn(&self, pgn: u32) -> Result<RefMut<'_, SockJ1939Fast>, CanError> {
-        let search = self
-            .fastpkg
-            .binary_search_by(|pkg| pkg.borrow().pgn.cmp(&pgn));
+        let search = self.fastpkg.binary_search_by(|pkg| pkg.borrow().pgn.cmp(&pgn));
         match search {
             Ok(idx) => match self.fastpkg[idx].try_borrow_mut() {
-                Err(_code) => Err(CanError::new(
-                    "message-get_mut",
-                    "internal fastpkg pool error",
-                )),
+                Err(_code) => Err(CanError::new("message-get_mut", "internal fastpkg pool error")),
                 Ok(mut_ref) => Ok(mut_ref),
             },
-            Err(_) => Err(CanError::new(
-                "fail-fastpgn-search",
-                format!("canid:{} not found", pgn),
-            )),
+            Err(_) => Err(CanError::new("fail-fastpgn-search", format!("canid:{pgn} not found" ))),
         }
     }
 
@@ -445,20 +471,30 @@ impl SockJ1939Filters {
         self.filter.push(filter);
         self
     }
-
+    /// Applies the current J1939 filter configuration to the given socket.
+    ///
+    /// This configures the underlying CAN/J1939 socket with the filter(s)
+    /// represented by this structure (e.g., PGN/address masks, promiscuous
+    /// mode, timestamping flags), replacing any previous configuration.
+    ///
+    /// # Errors
+    /// Returns a `CanError` if:
+    /// - the socket option calls (`setsockopt`, `bind`, etc.) fail (e.g., due to
+    ///   insufficient privileges, an invalid descriptor, or OS-level errors);
+    /// - the filter set is empty or internally inconsistent (e.g., invalid mask
+    ///   widths or mutually exclusive flags);
+    /// - required conversions (lengths, pointer casts) fail validation;
+    /// - there is an internal borrow/state conflict that prevents applying the
+    ///   configuration.
     pub fn apply(&mut self, sock: &SockCanHandle) -> Result<(), CanError> {
         // sort fast packet vector list
-        self.fastpkg
-            .sort_by(|a, b| a.borrow().pgn.cmp(&b.borrow().pgn));
+        self.fastpkg.sort_by(|a, b| a.borrow().pgn.cmp(&b.borrow().pgn));
 
         // build filter list
         let filter_len = self.filter.len();
         let j1939_filter = self.filter.as_slice();
         if filter_len > cglue::can_J1939_x_FILTER_MAX as usize {
-            return Err(CanError::new(
-                "j1939-filter-number",
-                "to many j1939 filters",
-            ));
+            return Err(CanError::new("j1939-filter-number", "to many j1939 filters"));
         }
 
         // register filter list
@@ -474,8 +510,7 @@ impl SockJ1939Filters {
 
         if status < 0 {
             return Err(CanError::new("fail-j1939-filter", cglue::get_perror()));
-        } else {
-            Ok(())
         }
+        Ok(())
     }
 }

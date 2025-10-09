@@ -40,7 +40,7 @@ pub enum Error<'a> {
 }
 
 pub trait MsgCodeGen<T> {
-    fn gen_code_message (&self, code: T) -> io::Result<()>;
+    fn gen_code_message(&self, code: T) -> io::Result<()>;
     fn gen_can_dbc_message(&self, code: T) -> io::Result<()>;
     fn gen_can_dbc_impl(&self, code: T) -> io::Result<()>;
 }
@@ -51,9 +51,9 @@ pub trait SigCodeGen<T> {
     fn gen_can_std_frame(&self, code: T, msg: &Message) -> io::Result<()>;
     //fn gen_can_mux_frame(&self, code: T, msg: &Message) -> io::Result<()>;
     fn gen_signal_trait(&self, code: T, msg: &Message) -> io::Result<()>;
-    fn gen_dbc_min_max (&self, code: T,msg: &Message)  -> io::Result<()>;
-    fn gen_signal_impl (&self, code: T,  msg: &Message) -> io::Result<()> ;
-    fn gen_signal_enum (&self, code: T, msg: &Message) -> io::Result<()>;
+    fn gen_dbc_min_max(&self, code: T, msg: &Message) -> io::Result<()>;
+    fn gen_signal_impl(&self, code: T, msg: &Message) -> io::Result<()>;
+    fn gen_signal_enum(&self, code: T, msg: &Message) -> io::Result<()>;
 }
 
 /// Baudrate of network in kbit/s
@@ -63,7 +63,7 @@ pub struct Baudrate(pub u64);
 /// One or multiple signals are the payload of a CAN frame.
 /// To determine the actual value of a signal the following fn applies:
 /// `let fnvalue = |can_signal_value| -> can_signal_value * factor + offset;`
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct Signal {
     pub name: String,
     pub multiplexer_indicator: MultiplexIndicator,
@@ -89,7 +89,7 @@ impl MessageId {
     }
 }
 
-#[derive(Clone,PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum Transmitter {
     /// node transmitting the message
     NodeName(String),
@@ -110,7 +110,7 @@ pub struct Version(pub String);
 #[derive(Clone)]
 pub struct Symbol(pub String);
 
-#[derive(Copy,Clone,Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum MultiplexIndicator {
     /// Multiplexor switch
     Multiplexor,
@@ -128,7 +128,7 @@ pub enum ByteOrder {
     BigEndian,
 }
 
-#[derive(Copy, Clone,Debug,PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ValueType {
     Signed,
     Unsigned,
@@ -232,26 +232,11 @@ pub struct ExtendedMultiplex {
 /// Object comments
 #[derive(Clone)]
 pub enum Comment {
-    Node {
-        node_name: String,
-        comment: String,
-    },
-    Message {
-        message_id: MessageId,
-        comment: String,
-    },
-    Signal {
-        message_id: MessageId,
-        signal_name: String,
-        comment: String,
-    },
-    EnvVar {
-        env_var_name: String,
-        comment: String,
-    },
-    Plain {
-        comment: String,
-    },
+    Node { node_name: String, comment: String },
+    Message { message_id: MessageId, comment: String },
+    Signal { message_id: MessageId, signal_name: String, comment: String },
+    EnvVar { env_var_name: String, comment: String },
+    Plain { comment: String },
 }
 
 /// CAN message (frame) details including signal details
@@ -317,15 +302,8 @@ pub enum AttributeDefinition {
 /// Encoding for signal raw values.
 #[derive(Clone)]
 pub enum ValueDescription {
-    Signal {
-        message_id: MessageId,
-        signal_name: String,
-        value_descriptions: Vec<ValDescription>,
-    },
-    EnvironmentVariable {
-        env_var_name: String,
-        value_descriptions: Vec<ValDescription>,
-    },
+    Signal { message_id: MessageId, signal_name: String, value_descriptions: Vec<ValDescription> },
+    EnvironmentVariable { env_var_name: String, value_descriptions: Vec<ValDescription> },
 }
 
 #[derive(Clone)]
@@ -411,11 +389,9 @@ impl DbcObject {
         };
 
         match dbc_buffer() {
-            Err(error) => Err(DbcError {
-                uid: filename,
-                error: Error::Misc,
-                info: error.to_string(),
-            }),
+            Err(error) => {
+                Err(DbcError { uid: filename, error: Error::Misc, info: error.to_string() })
+            }
             Ok(buffer) => {
                 let slice = buffer.leak();
                 let data = std::str::from_utf8(slice).unwrap();
@@ -429,16 +405,10 @@ impl DbcObject {
     }
 
     pub fn signal_by_name(&self, message_id: MessageId, signal_name: &str) -> Option<&Signal> {
-        let message = self
-            .messages
-            .iter()
-            .find(|message| message.id.0 == message_id.0);
+        let message = self.messages.iter().find(|message| message.id.0 == message_id.0);
 
         if let Some(message) = message {
-            return message
-                .signals
-                .iter()
-                .find(|signal| signal.name == *signal_name);
+            return message.signals.iter().find(|signal| signal.name == *signal_name);
         }
         None
     }
@@ -448,10 +418,7 @@ impl DbcObject {
         self.comments
             .iter()
             .filter_map(|x| match x {
-                Comment::Message {
-                    message_id: ref x_message_id,
-                    ref comment,
-                } => {
+                Comment::Message { message_id: ref x_message_id, ref comment } => {
                     if (*x_message_id).0 == message_id.0 {
                         Some(comment.as_str())
                     } else {
@@ -538,17 +505,10 @@ impl DbcObject {
         &self,
         message_id: MessageId,
     ) -> Result<Option<&Signal>, Error<'_>> {
-        let message = self
-            .messages
-            .iter()
-            .find(|message| message.id.0 == message_id.0);
+        let message = self.messages.iter().find(|message| message.id.0 == message_id.0);
 
         if let Some(message) = message {
-            if self
-                .extended_multiplex
-                .iter()
-                .any(|ext_mp| ext_mp.message_id.0 == message_id.0)
-            {
+            if self.extended_multiplex.iter().any(|ext_mp| ext_mp.message_id.0 == message_id.0) {
                 Err(Error::MultipleMultiplexors)
             } else {
                 Ok(message

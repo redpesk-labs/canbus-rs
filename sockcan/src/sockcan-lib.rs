@@ -36,9 +36,9 @@ mod sockj1939;
 mod dbcpool;
 
 pub mod prelude {
-    pub use crate::sockcan::*;
+    pub use crate::dbcpool::*;
     pub use crate::sockbmc::*;
+    pub use crate::sockcan::*;
     pub use crate::sockj1939::*;
     pub use crate::utils::*;
-    pub use crate::dbcpool::*;
 }

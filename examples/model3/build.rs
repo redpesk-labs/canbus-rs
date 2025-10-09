@@ -10,13 +10,12 @@ extern crate dbcparser;
 use dbcparser::prelude::*;
 
 fn main() {
-
     // !!! WARNING: model3can.dbc generate 33000 lines of code !!!
     //let dbc_infile="../dbc-log/simple.dbc";
-    let dbc_infile="./etc/dbc/model3can.dbc";
+    let dbc_infile = "./etc/dbc/model3can.dbc";
 
     // generate parser outside of project git repo
-    let dbc_outfile="./src/__model3-dbcgen.rs";
+    let dbc_outfile = "./src/__model3-dbcgen.rs";
 
     // invalidate build when dbc file changes
     println!("cargo:rerun-if-changed={}", dbc_infile);
@@ -37,7 +36,7 @@ fn main() {
         .outfile(dbc_outfile)
         .header(header)
         .range_check(true)
-        .whitelist(vec![280,614,599]) // restrict generated code size to candump.log messages
+        .whitelist(vec![280, 614, 599]) // restrict generated code size to candump.log messages
         //.blacklist(vec![614, 599])
         .generate()
         .expect("Fail to parse dbc-file'\n");

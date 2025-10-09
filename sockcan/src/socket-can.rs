@@ -58,54 +58,58 @@ pub enum CanTimeStamp {
 }
 
 /// Classical CAN frame structure (aka CAN 2.0B)
-/// canid:   CAN ID of the frame and CAN_///_FLAG flags, see canid_t definition
+/// canid:   CAN ID of the frame and CAN_///_FLAG flags, see `canid_t` definition
 /// @len:      CAN frame payload length in byte (0 .. 8)
-/// @can_dlc:  deprecated name for CAN frame payload length in byte (0 .. 8)
+/// @`can_dlc`:  deprecated name for CAN frame payload length in byte (0 .. 8)
 /// @__pad:    padding
 /// @__res0:   reserved / padding
-/// @len8_dlc: optional DLC value (9 .. 15) at 8 byte payload length
-///            len8_dlc contains values from 9 .. 15 when the payload length is
+/// @`len8_dlc`: optional DLC value (9 .. 15) at 8 byte payload length
+///            `len8_dlc` contains values from 9 .. 15 when the payload length is
 ///            8 bytes but the DLC value (see ISO 11898-1) is greater then 8.
-///            CAN_CTRLMODE_CC_LEN8_DLC flag has to be enabled in CAN driver.
+///            `CAN_CTRLMODE_CC_LEN8_DLC` flag has to be enabled in CAN driver.
 /// @data:     CAN frame payload (up to 8 byte)
 pub struct CanFrameRaw(pub cglue::can_frame);
 impl CanFrameRaw {
+    #[must_use]
     pub fn new(canid: SockCanId, len: u8, pad: u8, res: u8, data: [u8; 8usize]) -> Self {
-        CanFrameRaw {
-            0: cglue::can_frame {
-                can_id: canid,
-                __pad: pad,
-                __res0: res,
-                len8_dlc: 0,
-                data: data,
-                __bindgen_anon_1: cglue::can_frame__bindgen_ty_1 { len: len },
-            },
-        }
+        CanFrameRaw(cglue::can_frame {
+            can_id: canid,
+            __pad: pad,
+            __res0: res,
+            len8_dlc: 0,
+            data,
+            __bindgen_anon_1: cglue::can_frame__bindgen_ty_1 { len },
+        })
     }
+    #[must_use]
     pub fn empty(canid: u32) -> Self {
         let mut frame: CanFrameRaw = unsafe { mem::zeroed::<Self>() };
         frame.0.can_id = canid;
         frame
     }
-
+    #[must_use]
     pub fn as_ptr(&self) -> *mut std::ffi::c_void {
-        &self.0 as *const _ as *mut std::ffi::c_void
+        &raw const self.0 as *const _ as *mut std::ffi::c_void
     }
 
+    #[must_use]
     pub fn get_id(&self) -> SockCanId {
         self.0.can_id as SockCanId
     }
 
+    #[must_use]
     pub fn get_len(&self) -> u8 {
         unsafe { self.0.__bindgen_anon_1.len }
     }
 
+    #[must_use]
     pub fn get_data(&self) -> &[u8] {
         &self.0.data
     }
 }
 pub struct CanFdFrameRaw(pub cglue::canfd_frame);
 impl CanFdFrameRaw {
+    #[must_use]
     pub fn new(
         canid: SockCanId,
         len: u8,
@@ -114,39 +118,39 @@ impl CanFdFrameRaw {
         res1: u8,
         data: [u8; 64usize],
     ) -> Self {
-        CanFdFrameRaw {
-            0: cglue::canfd_frame {
-                can_id: canid,
-                len: len,
-                __res0: res0,
-                __res1: res1,
-                flags: flags,
-                data: data,
-            },
-        }
+        CanFdFrameRaw(
+            cglue::canfd_frame { can_id: canid, len, __res0: res0, __res1: res1, flags, data }
+        )
     }
 
+    #[must_use]
     pub fn empty(canid: u32) -> Self {
         let mut frame: CanFdFrameRaw = unsafe { mem::zeroed::<Self>() };
         frame.0.can_id = canid;
         frame
     }
 
+    #[must_use]
     pub fn as_ptr(&self) -> *mut std::ffi::c_void {
-        &self.0 as *const _ as *mut std::ffi::c_void
+        &raw const self.0 as *const _ as *mut std::ffi::c_void
     }
 
+    #[must_use]
     pub fn get_id(&self) -> SockCanId {
         self.0.can_id as SockCanId
     }
 
+    #[must_use]
     pub fn get_len(&self) -> u8 {
         self.0.len
     }
+
+    #[must_use]
     pub fn get_flag(&self) -> u8 {
         self.0.flags
     }
 
+    #[must_use]
     pub fn get_data(&self) -> &[u8] {
         &self.0.data
     }
@@ -160,6 +164,10 @@ pub enum CanAnyFrame {
 }
 
 impl CanAnyFrame {
+/// Returns id.
+///
+/// # Errors
+/// Returns `CanError` if id is unavailable.
     pub fn get_id(&self) -> Result<u32, CanError> {
         match self {
             CanAnyFrame::RawFd(frame) => Ok(frame.get_id()),
@@ -169,6 +177,10 @@ impl CanAnyFrame {
         }
     }
 
+/// Returns len.
+///
+/// # Errors
+/// Returns `CanError` if len is unavailable.
     pub fn get_len(&self) -> Result<u8, CanError> {
         match self {
             CanAnyFrame::RawFd(frame) => Ok(frame.get_len()),
@@ -177,7 +189,10 @@ impl CanAnyFrame {
             CanAnyFrame::None(_canid) => Ok(0),
         }
     }
-
+/// Returns data.
+///
+/// # Errors
+/// Returns `CanError` if data is unavailable.
     pub fn get_data(&self) -> Result<&[u8], CanError> {
         match self {
             CanAnyFrame::RawFd(frame) => Ok(frame.get_data()),
@@ -198,7 +213,7 @@ impl From<*const CanFrameRaw> for CanAnyFrame {
     fn from(src: *const CanFrameRaw) -> Self {
         #[allow(invalid_value)]
         let dst: CanFrameRaw = unsafe { MaybeUninit::uninit().assume_init() };
-        unsafe { std::ptr::copy_nonoverlapping(src, &dst.0 as *const _ as *mut CanFrameRaw, 1) };
+        unsafe { std::ptr::copy_nonoverlapping(src, &raw const dst.0 as *const _ as *mut CanFrameRaw, 1) };
         CanAnyFrame::RawStd(dst)
     }
 }
@@ -219,26 +234,71 @@ pub struct SockCanMsg {
 }
 
 impl SockCanMsg {
+    #[must_use] 
     pub fn get_iface(&self) -> i32 {
         self.iface
     }
 
+    #[must_use]
     pub fn get_stamp(&self) -> u64 {
         self.stamp
     }
 
+    #[must_use]
     pub fn get_raw(&self) -> &CanAnyFrame {
         &self.frame
     }
-
+    /// Returns the payload length (DLC) of this CAN frame.
+    ///
+    /// The value reflects the number of data bytes present:
+    /// - Classical CAN: typically `0..=8`
+    /// - CAN FD: up to `64`, depending on flags and DLC encoding
+    ///
+    /// # Returns
+    /// The payload length as `u8`.
+    ///
+    /// # Errors
+    /// Returns a `CanError` if:
+    /// - the frame is malformed or not fully initialized;
+    /// - the reported DLC exceeds the available buffer length (truncated frame);
+    /// - the DLC is invalid for the frame type (e.g., > 8 for Classical CAN without FD);
+    /// - frame flags (e.g., FD/RTR) are inconsistent with the stored length.
     pub fn get_len(&self) -> Result<u8, CanError> {
         self.frame.get_len()
     }
-
+    /// Returns the CAN identifier (11-bit standard or 29-bit extended) for this frame.
+    ///
+    /// The value is returned as a `u32` with the identifier bits already normalized
+    /// (i.e., without protocol flag bits).
+    ///
+    /// # Returns
+    /// The extracted CAN identifier as `u32`.
+    ///
+    /// # Errors
+    /// Returns a `CanError` if:
+    /// - the frame header is missing or malformed (e.g., not enough bytes to read the ID);
+    /// - the identifier bits are inconsistent with the frame flags (e.g., EFF/RTR/ERR);
+    /// - the computed identifier exceeds the valid bit-width for the reported frame type;
+    /// - internal validation of the underlying buffer/length fails.
     pub fn get_id(&self) -> Result<u32, CanError> {
         self.frame.get_id()
     }
-
+    /// Returns a borrowed view of the CAN frame payload.
+    ///
+    /// For classic CAN this slice is at most 8 bytes; for CAN FD it can be larger
+    /// (up to 64 bytes), depending on the underlying frame.
+    ///
+    /// # Returns
+    /// A borrowed byte slice referencing the payload contained in this frame.
+    ///
+    /// # Errors
+    /// Returns a `CanError` if:
+    /// - the internal raw frame length is invalid or inconsistent with the frame type;
+    /// - the payload pointer/offset computed from the raw frame is out of bounds;
+    /// - the frame is not initialized (e.g., was built from an incomplete OS read);
+    /// - any invariant required to expose a safe slice is violated.
+    ///
+    /// On success, the returned slice is tied to `&self` and does not allocate.
     pub fn get_data(&self) -> Result<&[u8], CanError> {
         self.frame.get_data()
     }
@@ -277,11 +337,11 @@ pub struct CanIsoTpInfo {
 
 #[derive(Clone)]
 pub enum CanProtoInfo {
-   J1939(CanJ1939Info),
-   IsoTp(CanIsoTpInfo),
-   Error(CanError),
-   Retry,
-   None,
+    J1939(CanJ1939Info),
+    IsoTp(CanIsoTpInfo),
+    Error(CanError),
+    Retry,
+    None,
 }
 
 #[derive(Clone)]
@@ -323,12 +383,12 @@ impl CanIFaceFrom<&str> for SockCanHandle {
         for idx in 0..cglue::can_SOCK_x_IFACE_LEN as usize {
             if idx == iface.len() {
                 break;
-            };
+            }
             unsafe { ifreq.ifr_ifrn.ifrn_name[idx] = iname[idx] as ::std::os::raw::c_char };
         }
 
         // get Can iface index
-        let rc = unsafe { cglue::ioctl(sock, cglue::can_SOCK_x_SIOCGIFINDEX as u64, &ifreq) };
+        let rc = unsafe { cglue::ioctl(sock, u64::from(cglue::can_SOCK_x_SIOCGIFINDEX), &ifreq) };
 
         if rc < 0 {
             rc
@@ -345,6 +405,32 @@ impl CanIFaceFrom<u32> for SockCanHandle {
 }
 
 impl SockCanHandle {
+    /// Opens a RAW CAN socket on the specified CAN interface.
+    ///
+    /// This creates and configures a RAW CAN socket (PF_CAN/RAW), optionally
+    /// enabling timestamping according to `timestamp`, and binds it to the
+    /// provided interface.
+    ///
+    /// # Type Parameters
+    /// - `T`: Any type that can be converted into an interface handle via
+    ///   `SockCanHandle: CanIFaceFrom<T>` (e.g., interface index, name, or wrapper).
+    ///
+    /// # Parameters
+    /// - `candev`: The CAN interface identifier (e.g., `"can0"` or an index).
+    /// - `timestamp`: Timestamping mode to apply to the socket (e.g., disabled,
+    ///   software, or hardware).
+    ///
+    /// # Returns
+    /// A newly opened `SockCanHandle` wrapped in `Self` on success.
+    ///
+    /// # Errors
+    /// Returns a `CanError` if:
+    /// - the socket cannot be created (e.g., `socket(PF_CAN, SOCK_RAW, CAN_RAW)` fails);
+    /// - the interface cannot be resolved from `candev` (invalid name/index or missing device);
+    /// - applying socket options for the requested `timestamp` mode fails;
+    /// - binding the socket to the interface fails (e.g., insufficient permissions or
+    ///   interface is down);
+    /// - any unexpected OS error occurs during setup (e.g., `fcntl`, `setsockopt`, `bind`).
     pub fn open_raw<T>(candev: T, timestamp: CanTimeStamp) -> Result<Self, CanError>
     where
         SockCanHandle: CanIFaceFrom<T>,
@@ -374,21 +460,13 @@ impl SockCanHandle {
             __sockaddr__: &canaddr as *const _ as *const cglue::sockaddr,
         };
         let status = unsafe {
-            cglue::bind(
-                sockfd,
-                sockaddr,
-                mem::size_of::<cglue::sockaddr_can>() as cglue::socklen_t,
-            )
+            cglue::bind(sockfd, sockaddr, mem::size_of::<cglue::sockaddr_can>() as cglue::socklen_t)
         };
         if status < 0 {
             return Err(CanError::new("fail-socketcan-bind", cglue::get_perror()));
         }
 
-        let mut sockcan = SockCanHandle {
-            mode: SockCanMod::RAW,
-            sockfd: sockfd,
-            callback: None,
-        };
+        let mut sockcan = SockCanHandle { mode: SockCanMod::RAW, sockfd, callback: None };
 
         match sockcan.set_timestamp(timestamp) {
             Err(error) => return Err(error),
@@ -409,11 +487,29 @@ impl SockCanHandle {
     pub fn as_rawfd(&self) -> i32 {
         self.sockfd
     }
-
+    /// Returns the network interface name (e.g., `"can0"`) for a given interface index.
+    ///
+    /// Internally this queries the kernel (e.g., via `ioctl(SIOCGIFNAME)` or an
+    /// equivalent mechanism) and converts the returned C string to `String`.
+    ///
+    /// # Parameters
+    /// - `iface`: The interface index (as returned by `SIOCGIFINDEX`, `if_nametoindex`,
+    ///   or other enumeration of CAN interfaces).
+    ///
+    /// # Returns
+    /// The interface name as a `String` on success.
+    ///
+    /// # Errors
+    /// Returns a `CanError` if:
+    /// - the OS call to resolve the index to a name fails (invalid index, insufficient
+    ///   privileges, or kernel/driver limitation);
+    /// - the returned name is not valid UTF-8 and cannot be converted to `String`;
+    /// - an ABI mismatch occurs (unexpected struct layout/size) causing the query to fail;
+    /// - any other unexpected OS error is reported while fetching the interface name.
     pub fn get_ifname(&self, iface: i32) -> Result<String, CanError> {
         let mut ifreq: cglue::ifreq = unsafe { mem::MaybeUninit::uninit().assume_init() };
         ifreq.ifr_ifru.ifru_ivalue /* ifr_index */= iface;
-        let rc = unsafe { cglue::ioctl(self.sockfd, cglue::can_SOCK_x_SIOCGIFNAME as u64, &ifreq) };
+        let rc = unsafe { cglue::ioctl(self.sockfd, u64::from(cglue::can_SOCK_x_SIOCGIFNAME), &ifreq) };
 
         if rc < 0 {
             Err(CanError::new("can-ifname-fail", cglue::get_perror()))
@@ -425,7 +521,26 @@ impl SockCanHandle {
             }
         }
     }
-
+    /// Enables or disables non-blocking mode on the underlying CAN socket.
+    ///
+    /// When non-blocking mode is disabled (`blocking = true`), I/O operations
+    /// may block until they can complete. When enabled (`blocking = false`),
+    /// operations return immediately with `EWOULDBLOCK`/`EAGAIN` if they would
+    /// otherwise block.
+    ///
+    /// # Parameters
+    /// - `blocking`: `true` to use blocking I/O, `false` for non-blocking.
+    ///
+    /// # Returns
+    /// A mutable reference to `self` on success (for call chaining).
+    ///
+    /// # Errors
+    /// Returns a `CanError` if:
+    /// - fetching current file status flags via `fcntl(F_GETFL)` fails;
+    /// - updating flags with `fcntl(F_SETFL)` fails (e.g., invalid descriptor,
+    ///   insufficient permissions, or platform-specific limitations);
+    /// - the socket handle is invalid or not a CAN socket;
+    /// - an unexpected OS error occurs while toggling non-blocking mode.
     pub fn set_blocking(&mut self, blocking: bool) -> Result<&mut Self, CanError> {
         // retrieve current flags
         let current_flag = unsafe { cglue::fcntl(self.sockfd, cglue::can_SOCK_x_F_GETFL as i32) };
@@ -446,13 +561,30 @@ impl SockCanHandle {
         }
         Ok(self)
     }
-
+    /// Sets read and write timeouts on the RAW CAN socket.
+    ///
+    /// Configures `SO_RCVTIMEO` and `SO_SNDTIMEO` using millisecond values.
+    /// A value of `0` typically means “no timeout” (blocking), while a positive
+    /// value sets the maximum blocking duration for the corresponding operation.
+    ///
+    /// # Parameters
+    /// - `read_ms`: Receive timeout in milliseconds for `recv/recvmsg`.
+    /// - `write_ms`: Send timeout in milliseconds for `send/sendmsg`.
+    ///
+    /// # Returns
+    /// A mutable reference to `self` on success (to allow call chaining).
+    ///
+    /// # Errors
+    /// Returns a `CanError` if:
+    /// - converting the millisecond values to `timeval` overflows or is invalid;
+    /// - a `setsockopt(SO_RCVTIMEO|SO_SNDTIMEO)` call fails (e.g., due to
+    ///   insufficient privileges, invalid arguments, or kernel/driver limitations);
+    /// - the socket handle is invalid or not a CAN RAW socket;
+    /// - the kernel rejects the option value or size (ABI mismatch).
     pub fn set_timeout(&mut self, read_ms: i64, write_ms: i64) -> Result<&mut Self, CanError> {
         if read_ms > 0 {
-            let timout = cglue::timeval {
-                tv_sec: read_ms / 1000,
-                tv_usec: read_ms * 1000 % 1000000,
-            };
+            let timout =
+                cglue::timeval { tv_sec: read_ms / 1000, tv_usec: read_ms * 1000 % 1_000_000 };
             unsafe {
                 let status = cglue::setsockopt(
                     self.sockfd,
@@ -469,10 +601,8 @@ impl SockCanHandle {
         }
 
         if write_ms > 0 {
-            let timout = cglue::timeval {
-                tv_sec: write_ms / 1000,
-                tv_usec: write_ms * 1000 % 1000000,
-            };
+            let timout =
+                cglue::timeval { tv_sec: write_ms / 1000, tv_usec: write_ms * 1000 % 1_000_000 };
             unsafe {
                 let status = cglue::setsockopt(
                     self.sockfd,
@@ -490,9 +620,26 @@ impl SockCanHandle {
 
         Ok(self)
     }
-
+    /// Enables or disables CAN loopback on the RAW socket.
+    ///
+    /// When loopback is enabled, frames sent by this socket can be received back
+    /// on the same socket (useful for testing). Disabling loopback suppresses this
+    /// behavior.
+    ///
+    /// # Parameters
+    /// - `loopback`: `true` to enable loopback; `false` to disable it.
+    ///
+    /// # Returns
+    /// A mutable reference to `self` on success (for call chaining).
+    ///
+    /// # Errors
+    /// Returns a `CanError` if:
+    /// - the underlying `setsockopt` call fails (e.g., due to insufficient
+    ///   privileges, invalid value, or missing kernel support);
+    /// - the socket handle is invalid or not a CAN RAW socket;
+    /// - the option value/size does not match what the kernel expects.
     pub fn set_loopback(&mut self, loopback: bool) -> Result<&mut Self, CanError> {
-        let flag = if loopback { 1 } else { 0 };
+        let flag = i32::from(loopback);
         let status = unsafe {
             cglue::setsockopt(
                 self.sockfd,
@@ -507,7 +654,23 @@ impl SockCanHandle {
         }
         Ok(self)
     }
-
+    /// Enables kernel timestamping on the RAW CAN socket.
+    ///
+    /// Depending on `timestamp`, this configures which timestamping mode the socket
+    /// should use (e.g., software timestamps, SO_TIMESTAMPNS, SO_TIMESTAMPING).
+    ///
+    /// # Parameters
+    /// - `timestamp`: Desired timestamping policy (see `CanTimeStamp`).
+    ///
+    /// # Returns
+    /// A mutable reference to `self` on success (for call chaining).
+    ///
+    /// # Errors
+    /// Returns a `CanError` if:
+    /// - the underlying `setsockopt` call fails (e.g., invalid arguments,
+    ///   insufficient privileges, or kernel does not support the requested mode);
+    /// - the option value/size does not match what the kernel expects;
+    /// - the socket handle is invalid or not a CAN RAW socket.
     pub fn set_timestamp(&mut self, timestamp: CanTimeStamp) -> Result<&mut Self, CanError> {
         let status = match timestamp {
             CanTimeStamp::SOFTWARE => {
@@ -566,7 +729,24 @@ impl SockCanHandle {
         }
         Ok(self)
     }
-
+    /// Enables kernel error monitoring on the RAW CAN socket using `mask`.
+    ///
+    /// Sets the CAN error-mask so that error frames matching `mask` are reported
+    /// by the socket (e.g., bus-off, error-passive, tx-timeout).
+    ///
+    /// # Parameters
+    /// - `mask`: Bitmask of error conditions to monitor (see `CanErrorMask`).
+    ///
+    /// # Returns
+    /// A mutable reference to `self` on success, to allow call chaining.
+    ///
+    /// # Errors
+    /// Returns a `CanError` if:
+    /// - the underlying `setsockopt` call fails (e.g., due to insufficient
+    ///   privileges, invalid arguments, or lack of kernel support);
+    /// - the provided mask is empty/invalid for this platform;
+    /// - the socket handle is not a valid CAN RAW socket;
+    /// - the size of the option value does not match what the kernel expects.
     pub fn set_monitoring(&mut self, mask: CanErrorMask) -> Result<&mut Self, CanError> {
         let flag = mask.bits();
         let status = unsafe {
@@ -607,7 +787,7 @@ impl SockCanHandle {
 
     pub fn get_raw_frame(&self, buffer: &mut [u8]) -> CanRecvInfo {
         let mut info: CanRecvInfo = unsafe { mem::zeroed::<CanRecvInfo>() };
-        let size= buffer.len() as u32;
+        let size = buffer.len() as u32;
 
         let iovec = cglue::iovec {
             iov_base: buffer as *const _ as *mut std::ffi::c_void,
@@ -639,8 +819,8 @@ impl SockCanHandle {
         }
 
         if info.count < 0 {
-            info.proto= CanProtoInfo::Error(CanError::new("can_read_frame",cglue::get_perror()));
-            return info
+            info.proto = CanProtoInfo::Error(CanError::new("can_read_frame", cglue::get_perror()));
+            return info;
         }
 
         // ref: https://github.com/torvalds/linux/blob/master/tools/testing/selftests/net/timestamping.c
@@ -653,28 +833,28 @@ impl SockCanHandle {
                         let time = unsafe {
                             &*(cglue::CMSG_DATA(cmsg) as *const _ as *mut cglue::timespec)
                         };
-                        info.stamp = (time.tv_sec * 1000000 + time.tv_nsec) as u64;
+                        info.stamp = (time.tv_sec * 1_000_000 + time.tv_nsec) as u64;
                         break;
                     }
                     cglue::can_RAW_x_SO_TIMESTAMP_NEW => {
                         let time = unsafe {
                             &*(cglue::CMSG_DATA(cmsg) as *const _ as *mut cglue::timespec)
                         };
-                        info.stamp = (time.tv_sec * 1000000 + time.tv_nsec) as u64;
+                        info.stamp = (time.tv_sec * 1_000_000 + time.tv_nsec) as u64;
                         break;
                     }
                     cglue::can_RAW_x_SO_TIMESTAMPNS => {
                         let time = unsafe {
                             &*(cglue::CMSG_DATA(cmsg) as *const _ as *mut cglue::timespec)
                         };
-                        info.stamp = (time.tv_sec * 1000000 + time.tv_nsec) as u64;
+                        info.stamp = (time.tv_sec * 1_000_000 + time.tv_nsec) as u64;
                         break;
                     }
                     cglue::can_RAW_x_SO_TIMESTAMP => {
                         let time = unsafe {
                             &*(cglue::CMSG_DATA(cmsg) as *const _ as *mut cglue::timeval)
                         };
-                        info.stamp = (time.tv_sec * 1000000 + time.tv_usec) as u64;
+                        info.stamp = (time.tv_sec * 1_000_000 + time.tv_usec) as u64;
                         break;
                     }
                     _ => {}
@@ -682,15 +862,14 @@ impl SockCanHandle {
 
                 cglue::can_J1939_x_SOL_CAN_J1939 => {
                     info.iface = canaddr.can_ifindex;
-                    let j1939_src= unsafe {CanJ1939Header {
+                    let j1939_src = unsafe {
+                        CanJ1939Header {
                             name: canaddr.can_addr.j1939.name,
-                            addr: canaddr.can_addr.j1939.addr
-                    }};
-
-                    let mut j1939_dst= CanJ1939Header {
-                        name:0,
-                        addr:0,
+                            addr: canaddr.can_addr.j1939.addr,
+                        }
                     };
+
+                    let mut j1939_dst = CanJ1939Header { name: 0, addr: 0 };
 
                     match cmsg.cmsg_type as u32 {
                         cglue::can_J1939_x_SCM_DEST_ADDR => {
@@ -708,8 +887,12 @@ impl SockCanHandle {
                         // }
                         _ => {}
                     }
-                    info.proto = CanProtoInfo::J1939(CanJ1939Info { src: j1939_src, dst: j1939_dst, pgn: unsafe{canaddr.can_addr.j1939.pgn} });
-                    }
+                    info.proto = CanProtoInfo::J1939(CanJ1939Info {
+                        src: j1939_src,
+                        dst: j1939_dst,
+                        pgn: unsafe { canaddr.can_addr.j1939.pgn },
+                    });
+                }
                 _ => {}
             }
             cmsg = unsafe { &*cglue::CMSG_NXTHDR(&msg_hdr, cmsg) };
@@ -731,26 +914,17 @@ impl SockCanHandle {
             CanAnyFrame::Err(CanError::new("can-invalid-frame", cglue::get_perror()))
         };
 
-        SockCanMsg {
-            frame: can_any_frame,
-            iface: info.iface,
-            stamp: info.stamp,
-        }
+        SockCanMsg { frame: can_any_frame, iface: info.iface, stamp: info.stamp }
     }
 }
 
 impl SockCanFilter {
+    #[must_use]
     pub fn new(size: usize) -> Self {
         if size > 0 {
-            SockCanFilter {
-                count: 0,
-                masks: Vec::with_capacity(size),
-            }
+            SockCanFilter { count: 0, masks: Vec::with_capacity(size) }
         } else {
-            SockCanFilter {
-                count: 0,
-                masks: Vec::new(),
-            }
+            SockCanFilter { count: 0, masks: Vec::new() }
         }
     }
 
@@ -758,10 +932,7 @@ impl SockCanFilter {
     /// by a filter if `received_id & mask == filter_id & mask` holds true.
     pub fn add_whitelist(&mut self, can_id: u32, can_mask: FilterMask) -> &mut Self {
         self.count += 1;
-        self.masks.push(cglue::can_filter {
-            can_id: can_id,
-            can_mask: can_mask.bits(),
-        });
+        self.masks.push(cglue::can_filter { can_id, can_mask: can_mask.bits() });
         self
     }
 
@@ -773,16 +944,30 @@ impl SockCanFilter {
         });
         self
     }
-
+    /// Applies the configured RAW socket options and filters to `sock`.
+    ///
+    /// This configures the underlying CAN RAW socket using the parameters
+    /// previously set on `self` (e.g., blocking mode, timeouts, timestamping,
+    /// loopback, error monitoring, filters/whitelist/blacklist, etc.).
+    ///
+    /// # Parameters
+    /// - `sock`: An already opened `SockCanHandle` targeting the desired CAN interface.
+    ///
+    /// # Returns
+    /// `Ok(())` if all options were successfully applied to the socket.
+    ///
+    /// # Errors
+    /// Returns a `CanError` if any of the following occur while applying options:
+    /// - the socket handle is invalid or not a RAW CAN socket;
+    /// - a `setsockopt`/`ioctl` call fails (e.g., insufficient privileges,
+    ///   unsupported option on this kernel, or invalid argument values);
+    /// - filter installation fails (e.g., empty/invalid filter set, size mismatch);
+    /// - timestamp/timeout/loopback/error-mask configuration cannot be applied;
+    /// - any system call returns an unexpected error code that cannot be mapped.
     pub fn apply(&mut self, sock: &SockCanHandle) -> Result<(), CanError> {
         match sock.mode {
             SockCanMod::RAW => {}
-            _ => {
-                return Err(CanError::new(
-                    "invalid-socketcan-mod",
-                    "not a RAW socket can",
-                ))
-            }
+            _ => return Err(CanError::new("invalid-socketcan-mod", "not a RAW socket can")),
         }
 
         let filter_ptr = self.masks.as_ptr();
@@ -797,8 +982,7 @@ impl SockCanFilter {
         };
         if status < 0 {
             return Err(CanError::new("fail-socketcan-bind", cglue::get_perror()));
-        } else {
-            Ok(())
         }
+        Ok(())
     }
 }

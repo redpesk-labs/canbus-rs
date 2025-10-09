@@ -102,5 +102,115 @@ Fulup:
 - implementer isotp
 
 
+## improve your Rust code
 
+Use **Clippy** and **rustfmt** to keep the codebase clean, idiomatic, and consistent.
+
+### install
+
+If you use `rustup` (recommended):
+
+```bash
+rustup update
+rustup component add clippy rustfmt
+```
+
+
+
+On Fedora without rustup:
+
+sudo dnf install rust-clippy rustfmt
+
+Check versions:
+
+cargo clippy -V
+rustfmt -V
+
+### run clippy
+
+cargo clippy --all-targets --all-features -- -D warnings -W clippy::pedantic
+
+    --all-targets lints libs, bins, tests, benches, examples
+
+    --all-features checks all feature combos
+
+    -D warnings fails the build on any warning
+
+    -W clippy::pedantic enables extra strict lints
+
+
+cargo clippy -p lib_dbcparser --all-targets --all-features -- -D warnings -W clippy::pedantic
+cargo clippy -p lib_sockcan    --all-targets --all-features -- -D warnings -W clippy::pedantic
+cargo clippy -p can-basic      --all-targets --all-features -- -D warnings -W clippy::pedantic
+cargo clippy -p can-bms        --all-targets --all-features -- -D warnings -W clippy::pedantic
+cargo clippy -p can-model3     --all-targets --all-features -- -D warnings -W clippy::pedantic
+
+
+
+3) configure clippy
+
+Create a clippy.toml at the repo root:
+
+warn = [
+  "clippy::pedantic",
+  "clippy::unwrap_used",
+  "clippy::expect_used",
+  "clippy::panic",
+  "clippy::todo",
+]
+
+allow = [
+  "clippy::module_name_repetitions",
+  "clippy::too_many_lines",
+  "clippy::missing_errors_doc",
+  "clippy::missing_panics_doc",
+]
+
+4) format code
+
+Add a rustfmt.toml:
+
+edition = "2021"
+use_small_heuristics = "Max"
+imports_granularity = "Crate"
+group_imports = "One"
+format_code_in_doc_comments = true
+wrap_comments = true
+
+
+cargo fmt --all
+
+5) ci integration (GitHub Actions)
+
+name: ci
+on: [push, pull_request]
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets --all-features -- -D warnings -W clippy::pedantic
+      - run: cargo test --all-features
+
+6) common fixes
+
+Replace unwrap/expect in libraries with ? and typed errors (e.g., thiserror)
+
+Use anyhow in binaries/examples for ergonomic errors
+
+Replace println!/eprintln! with a logger (tracing, log)
+
+Document every unsafe block with a // SAFETY: comment describing invariants
+
+7) troubleshooting
+
+no such command: clippy → rustup component add clippy (or sudo dnf install rust-clippy on Fedora)
+
+noisy generated code → apply #[allow(...)] narrowly around the generated section, not globally
+
+no such command: clippy → rustup component add clippy (or sudo dnf install rust-clippy on Fedora)
 

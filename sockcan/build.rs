@@ -6,6 +6,10 @@
  * License: $RP_BEGIN_LICENSE$ SPDX:MIT https://opensource.org/licenses/MIT $RP_END_LICENSE$
  *
 */
+
+use std::env;
+use std::path::PathBuf;
+
 extern crate bindgen;
 extern crate cc;
 
@@ -15,6 +19,8 @@ fn main() {
 
     // invalidate the built crate whenever the wrapper changes
     println!("cargo:rerun-if-changed=src/capi/sockcan-map.h");
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=src/cglue-mod.rs");
 
     let header = "
     // -----------------------------------------------------------------------
@@ -60,13 +66,15 @@ fn main() {
         .allowlist_type("ifreq")
         .allowlist_type("timeval")
         .allowlist_type("bcm_msg_head")
-
         .blocklist_item("json_object_delete_fn")
         // generate sockcan wrapper
         .generate()
         .expect("Unable to generate sockcan");
 
-    sockcan
-        .write_to_file("src/capi/sockcan-map.rs")
-        .expect("Couldn't write sockcan!");
+    sockcan.write_to_file("src/capi/sockcan-map.rs").expect("Couldn't write sockcan!");
+
+    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
+    let out_file = out_dir.join("sockcan-map.rs");
+
+    sockcan.write_to_file(&out_file).expect("Couldn't write sockcan!");
 }

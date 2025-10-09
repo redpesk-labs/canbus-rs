@@ -8,7 +8,6 @@
  * License: $RP_BEGIN_LICENSE$ SPDX:MIT https://opensource.org/licenses/MIT $RP_END_LICENSE$
  */
 
-
 #![doc(
     html_logo_url = "https://iot.bzh/images/defaults/company/512-479-max-transp.png",
     html_favicon_url = "https://iot.bzh/images/defaults/favicon.ico"
@@ -34,6 +33,6 @@ pub use crate::gencode::*;
 /// Prélude pratique pour `use dbcparser::prelude::*;`
 pub mod prelude {
     pub use crate::data::*;
-    pub use crate::parser::*;
     pub use crate::gencode::*;
+    pub use crate::parser::*;
 }

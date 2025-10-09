@@ -31,7 +31,10 @@ fn main() -> Result<(), String> {
     // set a filter on a non existing message
     match SockBcmCmd::new(
         CanBcmOpCode::RxSetup,
-        CanBcmFlag::RX_FILTER_ID | CanBcmFlag::SET_TIMER | CanBcmFlag::START_TIMER | CanBcmFlag::RX_ANNOUNCE_RESUME,
+        CanBcmFlag::RX_FILTER_ID
+            | CanBcmFlag::SET_TIMER
+            | CanBcmFlag::START_TIMER
+            | CanBcmFlag::RX_ANNOUNCE_RESUME,
         0x118,
     )
     .set_timers(500, 1000)
@@ -40,7 +43,6 @@ fn main() -> Result<(), String> {
         Err(error) => panic!("bcm-filter fail Error:{}", error.to_string()),
         Ok(()) => println!("sockbcm filter ready"),
     }
-
 
     match SockBcmCmd::new(
         CanBcmOpCode::RxSetup,
@@ -106,9 +108,15 @@ fn main() -> Result<(), String> {
                 }
             },
 
-            CanBcmOpCode::RxStatus => println!("{:4} BCM status filter canid:{:#04x}", count, msg.get_id().unwrap()),
-            CanBcmOpCode::RxSetup => println!("{:4} BCM setup filter canid:{:#04x}", count, msg.get_id().unwrap()),
-            CanBcmOpCode::RxTimeout => println!("{:4} BCM Timeout canid:{:#04x}", count, msg.get_id().unwrap()),
+            CanBcmOpCode::RxStatus => {
+                println!("{:4} BCM status filter canid:{:#04x}", count, msg.get_id().unwrap())
+            }
+            CanBcmOpCode::RxSetup => {
+                println!("{:4} BCM setup filter canid:{:#04x}", count, msg.get_id().unwrap())
+            }
+            CanBcmOpCode::RxTimeout => {
+                println!("{:4} BCM Timeout canid:{:#04x}", count, msg.get_id().unwrap())
+            }
             _ => panic!("unsupported bcm opcode:{:?}", msg.get_opcode()),
         }
     }

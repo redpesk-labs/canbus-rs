@@ -7,8 +7,8 @@
  *
  */
 
-extern crate sockcan;
 extern crate serde;
+extern crate sockcan;
 
 // include generated code and Rust module as declare in build.rs->DbcParser::new("DbcSimple")
 include!("./__model3-dbcgen.rs");
@@ -35,11 +35,7 @@ fn main() -> Result<(), CanError> {
     let args: Vec<String> = env::args().collect();
     println!("syntax: {} [vcan0] [rate-ms] [watchdog-ms]", args[0]);
 
-    let candev = if args.len() > 1 {
-        args[1].as_str()
-    } else {
-        "vcan0"
-    };
+    let candev = if args.len() > 1 { args[1].as_str() } else { "vcan0" };
     let rate = if args.len() > 2 {
         u64::from_str(args[2].as_str()).expect("rate expect a valid integer")
     } else {
@@ -61,12 +57,15 @@ fn main() -> Result<(), CanError> {
     for canid in pool.get_ids() {
         SockBcmCmd::new(
             CanBcmOpCode::RxSetup,
-            CanBcmFlag::RX_FILTER_ID | CanBcmFlag::SET_TIMER | CanBcmFlag::START_TIMER | CanBcmFlag::RX_ANNOUNCE_RESUME,
+            CanBcmFlag::RX_FILTER_ID
+                | CanBcmFlag::SET_TIMER
+                | CanBcmFlag::START_TIMER
+                | CanBcmFlag::RX_ANNOUNCE_RESUME,
             *canid,
         )
         .set_timers(rate, watchdog)
         .apply(&sock)?;
-    };
+    }
 
     // loop on message reception and decode messages
     let mut count = 0;
@@ -94,15 +93,12 @@ fn main() -> Result<(), CanError> {
 
         // loop on message signal and display values.
         for sig_rfc in msg.get_signals() {
-            let signal= sig_rfc.borrow();
+            let signal = sig_rfc.borrow();
             let stamp = signal.get_stamp();
-            let mut sig_age_ms=0;
+            let mut sig_age_ms = 0;
 
-            let json= if cfg!(feature= "serde") {
-                signal.to_json()
-            } else {
-                "serde-disable".to_owned()
-            };
+            let json =
+                if cfg!(feature = "serde") { signal.to_json() } else { "serde-disable".to_owned() };
 
             if stamp > 0 {
                 sig_age_ms = (msg_data.stamp - signal.get_stamp()) / 1000;

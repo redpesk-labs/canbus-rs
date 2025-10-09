@@ -11,9 +11,9 @@ extern crate dbcparser;
 use dbcparser::prelude::*;
 
 use std::env;
-use std::io::{self,Error,ErrorKind};
+use std::io::{self, Error, ErrorKind};
 
-const HEADER:&str = "
+const HEADER: &str = "
 // -----------------------------------------------------------------------
 //              <- DBC file Rust mapping ->
 // -----------------------------------------------------------------------
@@ -25,27 +25,22 @@ const HEADER:&str = "
 // -----------------------------------------------------------------------
 ";
 
-
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
 
     if args.len() != 3 {
-        println! ("SYNTAX-Error => can-dbc '/xxx/file.dbc' '/yyyy/candump.log'");
-        println! ("example: {} 'examples/dbc-log/model3can.dbc' 'examples/dbc-log/candump.log'", args[0]);
-        return Err(Error::new(
-                ErrorKind::Other,
-                "invalid input arguments"
-                ));
+        println!("SYNTAX-Error => can-dbc '/xxx/file.dbc' '/yyyy/candump.log'");
+        println!(
+            "example: {} 'examples/dbc-log/model3can.dbc' 'examples/dbc-log/candump.log'",
+            args[0]
+        );
+        return Err(Error::new(ErrorKind::Other, "invalid input arguments"));
     }
 
-    let dbcfile= args[1].as_str();
-    let dumpfile= args[2].as_str();
+    let dbcfile = args[1].as_str();
+    let dumpfile = args[2].as_str();
 
-    DbcParser::new("Demo")
-        .dbcfile(dbcfile)
-        .outfile(dumpfile)
-        .header(HEADER)
-        .generate() ?;
+    DbcParser::new("Demo").dbcfile(dbcfile).outfile(dumpfile).header(HEADER).generate()?;
 
     Ok(())
 }

@@ -35,12 +35,26 @@ bitflags! {
     }
 }
 impl CanBcmFlag {
+    #[must_use]
     pub fn check(flags: CanBcmFlag, value: u32) -> bool {
         flags.bits() & value != 0
     }
 }
 
 impl CanBcmOpCode {
+    /// Converts a raw numeric opcode into a typed `CanBcmOpCode`.
+    ///
+    /// # Parameters
+    /// - `opcode`: Numeric value coming from user input or kernel headers.
+    ///
+    /// # Returns
+    /// The corresponding strongly-typed `CanBcmOpCode`.
+    ///
+    /// # Errors
+    /// Returns a `CanError` if:
+    /// - the numeric value does not match any known BCM opcode (unsupported/unknown value);
+    /// - the value is reserved or not available on this platform/kernel;
+    /// - an internal conversion/check fails while validating the mapping.
     pub fn from(opcode: u32) -> Result<CanBcmOpCode, CanError> {
         let ope = match opcode {
             cglue::can_BCM_OPE_x_TX_SETUP => CanBcmOpCode::TxSetup,
@@ -55,16 +69,12 @@ impl CanBcmOpCode {
             cglue::can_BCM_OPE_x_RX_STATUS => CanBcmOpCode::RxStatus,
             cglue::can_BCM_OPE_x_RX_TIMEOUT => CanBcmOpCode::RxTimeout,
             cglue::can_BCM_OPE_x_RX_CHANGED => CanBcmOpCode::RxChanged,
-            _ => {
-                return Err(CanError::new(
-                    "invalid-bcm-opcode",
-                    format!("value={}", opcode),
-                ))
-            }
+            _ => return Err(CanError::new("invalid-bcm-opcode", format!("value={opcode}"))),
         };
         Ok(ope)
     }
 
+    #[must_use]
     pub fn as_u32(opcode: &CanBcmOpCode) -> u32 {
         match opcode {
             CanBcmOpCode::TxSetup => cglue::can_BCM_OPE_x_TX_SETUP,
@@ -95,36 +105,91 @@ pub struct SockBcmMsg {
 }
 
 impl SockBcmMsg {
+    #[must_use]
     pub fn get_iface(&self) -> i32 {
         self.info.iface
     }
 
+    #[must_use]
     pub fn get_opcode(&self) -> CanBcmOpCode {
         self.opcode
     }
 
+    #[must_use]
     pub fn get_stamp(&self) -> u64 {
         self.info.stamp
     }
 
+    #[must_use]
     pub fn get_raw(&self) -> &CanAnyFrame {
         &self.frame
     }
-
+    /// Returns the payload length (DLC) of this BCM frame.
+    ///
+    /// The value is the number of data bytes carried by the frame
+    /// (Classical CAN typically ≤ 8; CAN FD may be larger depending on flags/DLC).
+    ///
+    /// # Returns
+    /// The payload length as `u8`.
+    ///
+    /// # Errors
+    /// Returns a `CanError` if:
+    /// - the underlying buffer is shorter than the reported DLC (truncated frame);
+    /// - the DLC is out of range for the frame type (e.g., > 8 for Classical CAN, or
+    ///   exceeds the supported maximum for CAN FD);
+    /// - frame flags (e.g., FD/RTR) are inconsistent with the stored length;
+    /// - the frame is uninitialized or otherwise malformed.
     pub fn get_len(&self) -> Result<u8, CanError> {
         self.frame.get_len()
     }
 
+    /// Returns the CAN identifier (standard or extended) of this BCM frame.
+    ///
+    /// # Returns
+    /// The 29-bit extended or 11-bit standard CAN identifier as `u32`.
+    ///
+    /// # Errors
+    /// Returns a `CanError` if:
+    /// - the frame header is missing or malformed (e.g., not enough bytes for an ID);
+    /// - required flags (EFF/RTR/ERR) are inconsistent with the stored ID bits;
+    /// - extracting or validating the identifier would overflow or violate bit-width constraints.
     pub fn get_id(&self) -> Result<u32, CanError> {
         self.frame.get_id()
     }
-
+    /// Returns a borrowed view over the payload bytes of this BCM frame.
+    ///
+    /// # Returns
+    /// A slice referencing the frame data (`&[u8]`).
+    ///
+    /// # Errors
+    /// Returns a `CanError` if:
+    /// - the underlying buffer is shorter than the reported DLC/length;
+    /// - the frame is not initialized or contains an invalid layout (e.g., FD flag
+    ///   without enough bytes);
+    /// - an internal check fails while validating the slice boundaries.
     pub fn get_data(&self) -> Result<&[u8], CanError> {
         self.frame.get_data()
     }
 }
 
 pub trait SockCanBmc {
+    /// Opens a CAN BCM (Broadcast Manager) socket on the given interface with the
+    /// requested timestamping mode.
+    ///
+    /// # Parameters
+    /// - `candev`: Interface identifier (e.g., `"can0"` or an index) convertible via `CanIFaceFrom<T>`.
+    /// - `timestamp`: Desired timestamping behavior for received frames.
+    ///
+    /// # Returns
+    /// A configured `SockCanHandle` ready to use with BCM operations.
+    ///
+    /// # Errors
+    /// Returns a `CanError` if:
+    /// - the socket cannot be created (e.g., OS does not support BCM or `socket()` fails);
+    /// - binding to the interface fails (invalid interface name/index, permission error, or OS error);
+    /// - required options cannot be applied via `setsockopt` (e.g., timestamping not supported);
+    /// - conversions of sizes/lengths or numeric casts fail validation (overflow/truncation);
+    /// - `candev` cannot be converted by the `CanIFaceFrom<T>` implementation.
     fn open_bcm<T>(candev: T, timestamp: CanTimeStamp) -> Result<SockCanHandle, CanError>
     where
         SockCanHandle: CanIFaceFrom<T>;
@@ -171,11 +236,7 @@ impl SockCanBmc for SockCanHandle {
             return Err(CanError::new("fail-socketcan-connect", cglue::get_perror()));
         }
 
-        let mut sockcan = SockCanHandle {
-            sockfd: sockfd,
-            callback: None,
-            mode: SockCanMod::BCM,
-        };
+        let mut sockcan = SockCanHandle { sockfd, callback: None, mode: SockCanMod::BCM };
 
         match sockcan.set_timestamp(timestamp) {
             Err(error) => return Err(error),
@@ -209,32 +270,33 @@ impl SockCanBmc for SockCanHandle {
             Err(_error) => CanBcmOpCode::Unknown,
         };
 
-        SockBcmMsg {
-            opcode: opcode,
-            frame: can_any_frame,
-            info: info,
-        }
+        SockBcmMsg { opcode, frame: can_any_frame, info }
     }
 }
 
 pub struct CanBcmMsg(cglue::can_bcm_msg);
 impl CanBcmMsg {
+    #[must_use]
     pub fn empty() -> CanBcmMsg {
         unsafe { mem::zeroed::<Self>() }
     }
 
+    #[must_use]
     pub fn as_raw(&self) -> *mut std::ffi::c_void {
         &self.0 as *const _ as *mut std::ffi::c_void
     }
 
+    #[must_use]
     pub fn get_count(&self) -> u32 {
         self.0.head.count
     }
 
+    #[must_use]
     pub fn get_id(&self) -> u32 {
         self.0.head.can_id
     }
 
+    #[must_use]
     pub fn check_flags(&self, flags: CanBcmFlag) -> bool {
         flags.bits() & self.0.head.flags != 0
     }
@@ -242,22 +304,24 @@ impl CanBcmMsg {
 
 pub struct CanFdBcmMsg(cglue::canfd_bcm_msg);
 impl CanFdBcmMsg {
+    #[must_use]
     pub fn empty() -> CanFdBcmMsg {
         unsafe { mem::zeroed::<Self>() }
     }
-
+    #[must_use]
     pub fn as_raw(&self) -> *mut std::ffi::c_void {
         &self.0 as *const _ as *mut std::ffi::c_void
     }
 
+    #[must_use]
     pub fn get_count(&self) -> u32 {
         self.0.head.count
     }
-
+    #[must_use]
     pub fn get_id(&self) -> u32 {
         self.0.head.can_id
     }
-
+    #[must_use]
     pub fn check_flags(&self, flags: CanBcmFlag) -> bool {
         flags.bits() & self.0.head.flags != 0
     }
@@ -300,12 +364,13 @@ impl CanBcmAddFilter<CanFdFrameRaw> for SockBcmCmd {
 }
 
 impl SockBcmCmd {
+    #[must_use]
     pub fn new(opcode: CanBcmOpCode, flags: CanBcmFlag, canid: SockCanId) -> Self {
         // BCM filter have at least one filter
         SockBcmCmd {
-            opcode: opcode,
-            flags: flags,
-            canid: canid,
+            opcode,
+            flags,
+            canid,
             frames: Vec::new(),
             fdframes: Vec::new(),
             muxid: Vec::new(),
@@ -337,33 +402,45 @@ impl SockBcmCmd {
         if self.rx_watchdog > 0 {
             head.ival1 = cglue::bcm_timeval {
                 tv_sec: (self.rx_watchdog / 1000) as i64,
-                tv_usec: (self.rx_watchdog * 1000 % 1000000) as i64,
+                tv_usec: (self.rx_watchdog * 1000 % 1_000_000) as i64,
             };
         }
 
         if self.rx_maxrate > 0 {
             head.ival2 = cglue::bcm_timeval {
                 tv_sec: (self.rx_maxrate / 1000) as i64,
-                tv_usec: (self.rx_maxrate * 1000 % 1000000) as i64,
+                tv_usec: (self.rx_maxrate * 1000 % 1_000_000) as i64,
             };
         }
     }
-
+    /// Applies the current BCM (Broadcast Manager) filter configuration to the given socket.
+    ///
+    /// This configures the underlying CAN BCM socket with the prepared filter set
+    /// (standard/FD frames, masks, timers, and flags), replacing any previous configuration.
+    ///
+    /// # Parameters
+    /// - `sock`: The target socket handle to configure.
+    ///
+    /// # Returns
+    /// `Ok(())` on success.
+    ///
+    /// # Errors
+    /// Returns a `CanError` if:
+    /// - a system call fails (e.g., `socket`, `bind`, `setsockopt`, or `send`/`recvmsg`);
+    /// - the filter set is empty or internally inconsistent (e.g., frame/mask count mismatch);
+    /// - requested options are invalid for the platform or protocol (e.g., FD flags on a non-FD socket);
+    /// - numeric conversions of sizes/lengths fail validation (truncation/overflow);
+    /// - an internal borrow/state conflict prevents applying the configuration.
     pub fn apply(&mut self, sock: &SockCanHandle) -> Result<(), CanError> {
         match sock.mode {
             SockCanMod::BCM => {}
-            _ => {
-                return Err(CanError::new(
-                    "invalid-socketcan-mod",
-                    "not a BCM socketcan",
-                ))
-            }
+            _ => return Err(CanError::new("invalid-socketcan-mod", "not a BCM socketcan")),
         }
 
         match self.opcode {
             CanBcmOpCode::RxSetup => {
                 if CanBcmFlag::check(CanBcmFlag::RX_FILTER_ID, self.flags.bits()) {
-                    if self.frames.len() > 0 || self.fdframes.len() > 0 {
+                    if self.frames.len() > 0 || !self.frames.is_empty(){
                         return Err(CanError::new(
                             "invalid-multiplex-filter",
                             "RX_FILTER_ID and Multiplex filter are exclusinve",
@@ -381,14 +458,14 @@ impl SockBcmCmd {
                             "invalid-socketcan-filter",
                             "BCM:FdFrame no filter defined",
                         ));
-                    };
+                    }
                 } else {
                     if self.frames.len() == 0 {
                         return Err(CanError::new(
                             "invalid-socketcan-filter",
                             "BCM:StdFrame no filter defined",
                         ));
-                    };
+                    }
                 }
             }
 
@@ -398,7 +475,7 @@ impl SockBcmCmd {
                         "invalid-socketcan-filter",
                         "BCM:RxDelete does not accept frames",
                     ));
-                };
+                }
             }
             _ => {
                 return Err(CanError::new(
@@ -457,8 +534,7 @@ impl SockBcmCmd {
         let count = unsafe { cglue::write(sock.sockfd, buffer_addr, buffer_len) };
         if count != buffer_len as isize {
             return Err(CanError::new("fail-socketbcm-write", cglue::get_perror()));
-        } else {
-            Ok(())
         }
+        Ok(())
     }
 }

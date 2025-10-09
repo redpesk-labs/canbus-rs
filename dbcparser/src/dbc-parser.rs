@@ -208,10 +208,8 @@ fn version(s: &str) -> IResult<&str, Version> {
 fn bit_timing(s: &str) -> IResult<&str, Vec<Baudrate>> {
     let (s, _) = multispace0(s)?;
     let (s, _) = tag("BS_:")(s)?;
-    let (s, baudrates) = opt(preceded(
-        ms1,
-        separated_list0(comma, map(complete::u64, Baudrate)),
-    ))(s)?;
+    let (s, baudrates) =
+        opt(preceded(ms1, separated_list0(comma, map(complete::u64, Baudrate))))(s)?;
     Ok((s, baudrates.unwrap_or_default()))
 }
 
@@ -300,13 +298,7 @@ fn attribute_default(s: &str) -> IResult<&str, AttributeDefault> {
     let (s, _) = semi_colon(s)?;
     let (s, _) = line_ending(s)?;
 
-    Ok((
-        s,
-        AttributeDefault {
-            attribute_name: attribute_name.to_string(),
-            attribute_value,
-        },
-    ))
+    Ok((s, AttributeDefault { attribute_name: attribute_name.to_string(), attribute_value }))
 }
 
 fn node_comment(s: &str) -> IResult<&str, Comment> {
@@ -316,13 +308,7 @@ fn node_comment(s: &str) -> IResult<&str, Comment> {
     let (s, _) = ms1(s)?;
     let (s, comment) = char_string(s)?;
 
-    Ok((
-        s,
-        Comment::Node {
-            node_name,
-            comment: comment.to_string(),
-        },
-    ))
+    Ok((s, Comment::Node { node_name, comment: comment.to_string() }))
 }
 
 fn message_comment(s: &str) -> IResult<&str, Comment> {
@@ -332,13 +318,7 @@ fn message_comment(s: &str) -> IResult<&str, Comment> {
     let (s, _) = ms1(s)?;
     let (s, comment) = char_string(s)?;
 
-    Ok((
-        s,
-        Comment::Message {
-            message_id,
-            comment: comment.to_string(),
-        },
-    ))
+    Ok((s, Comment::Message { message_id, comment: comment.to_string() }))
 }
 
 fn signal_comment(s: &str) -> IResult<&str, Comment> {
@@ -349,14 +329,7 @@ fn signal_comment(s: &str) -> IResult<&str, Comment> {
     let (s, signal_name) = c_ident(s)?;
     let (s, _) = ms1(s)?;
     let (s, comment) = char_string(s)?;
-    Ok((
-        s,
-        Comment::Signal {
-            message_id,
-            signal_name,
-            comment: comment.to_string(),
-        },
-    ))
+    Ok((s, Comment::Signal { message_id, signal_name, comment: comment.to_string() }))
 }
 
 fn env_var_comment(s: &str) -> IResult<&str, Comment> {
@@ -366,36 +339,20 @@ fn env_var_comment(s: &str) -> IResult<&str, Comment> {
     let (s, env_var_name) = c_ident(s)?;
     let (s, _) = ms1(s)?;
     let (s, comment) = char_string(s)?;
-    Ok((
-        s,
-        Comment::EnvVar {
-            env_var_name,
-            comment: comment.to_string(),
-        },
-    ))
+    Ok((s, Comment::EnvVar { env_var_name, comment: comment.to_string() }))
 }
 
 fn comment_plain(s: &str) -> IResult<&str, Comment> {
     let (s, comment) = char_string(s)?;
-    Ok((
-        s,
-        Comment::Plain {
-            comment: comment.to_string(),
-        },
-    ))
+    Ok((s, Comment::Plain { comment: comment.to_string() }))
 }
 
 fn comment(s: &str) -> IResult<&str, Comment> {
     let (s, _) = multispace0(s)?;
     let (s, _) = tag("CM_")(s)?;
     let (s, _) = ms1(s)?;
-    let (s, comment) = alt((
-        node_comment,
-        message_comment,
-        env_var_comment,
-        signal_comment,
-        comment_plain,
-    ))(s)?;
+    let (s, comment) =
+        alt((node_comment, message_comment, env_var_comment, signal_comment, comment_plain))(s)?;
     let (s, _) = semi_colon(s)?;
     let (s, _) = line_ending(s)?;
     Ok((s, comment))
@@ -405,13 +362,7 @@ fn value_description(s: &str) -> IResult<&str, ValDescription> {
     let (s, a) = double(s)?;
     let (s, _) = ms1(s)?;
     let (s, b) = char_string(s)?;
-    Ok((
-        s,
-        ValDescription {
-            a,
-            b: b.to_string(),
-        },
-    ))
+    Ok((s, ValDescription { a, b: b.to_string() }))
 }
 
 fn value_description_for_signal(s: &str) -> IResult<&str, ValueDescription> {
@@ -421,10 +372,8 @@ fn value_description_for_signal(s: &str) -> IResult<&str, ValueDescription> {
     let (s, message_id) = message_id(s)?;
     let (s, _) = ms1(s)?;
     let (s, signal_name) = c_ident(s)?;
-    let (s, value_descriptions) = many_till(
-        preceded(ms1, value_description),
-        preceded(opt(ms1), semi_colon),
-    )(s)?;
+    let (s, value_descriptions) =
+        many_till(preceded(ms1, value_description), preceded(opt(ms1), semi_colon))(s)?;
     Ok((
         s,
         ValueDescription::Signal {
@@ -440,10 +389,8 @@ fn value_description_for_env_var(s: &str) -> IResult<&str, ValueDescription> {
     let (s, _) = tag("VAL_")(s)?;
     let (s, _) = ms1(s)?;
     let (s, env_var_name) = c_ident(s)?;
-    let (s, value_descriptions) = many_till(
-        preceded(ms1, value_description),
-        preceded(opt(ms1), semi_colon),
-    )(s)?;
+    let (s, value_descriptions) =
+        many_till(preceded(ms1, value_description), preceded(opt(ms1), semi_colon))(s)?;
     Ok((
         s,
         ValueDescription::EnvironmentVariable {
@@ -493,12 +440,10 @@ fn dummy_node_vector_3(s: &str) -> IResult<&str, AccessType> {
 
 fn access_type(s: &str) -> IResult<&str, AccessType> {
     let (s, _) = tag("DUMMY_NODE_VECTOR")(s)?;
-    let (s, node) = alt((
-        dummy_node_vector_0,
-        dummy_node_vector_1,
-        dummy_node_vector_2,
-        dummy_node_vector_3,
-    ))(s)?;
+    let (s, node) =
+        alt((dummy_node_vector_0, dummy_node_vector_1, dummy_node_vector_2, dummy_node_vector_3))(
+            s,
+        )?;
     Ok((s, node))
 }
 
@@ -567,13 +512,7 @@ fn environment_variable_data(s: &str) -> IResult<&str, EnvironmentVariableData> 
     let (s, data_size) = complete::u64(s)?;
     let (s, _) = semi_colon(s)?;
     let (s, _) = line_ending(s)?;
-    Ok((
-        s,
-        EnvironmentVariableData {
-            env_var_name,
-            data_size,
-        },
-    ))
+    Ok((s, EnvironmentVariableData { env_var_name, data_size }))
 }
 
 fn signal_type(s: &str) -> IResult<&str, SignalType> {
@@ -640,9 +579,7 @@ fn attribute_value_f64(s: &str) -> IResult<&str, AttributeValue> {
 }
 
 fn attribute_value_charstr(s: &str) -> IResult<&str, AttributeValue> {
-    map(char_string, |x| {
-        AttributeValue::AttributeValueCharString(x.to_string())
-    })(s)
+    map(char_string, |x| AttributeValue::AttributeValueCharString(x.to_string()))(s)
 }
 
 fn attribute_value(s: &str) -> IResult<&str, AttributeValue> {
@@ -660,10 +597,7 @@ fn network_node_attribute_value(s: &str) -> IResult<&str, AttributeValuedForObje
     let (s, node_name) = c_ident(s)?;
     let (s, _) = ms1(s)?;
     let (s, value) = attribute_value(s)?;
-    Ok((
-        s,
-        AttributeValuedForObjectType::NetworkNodeAttributeValue(node_name, value),
-    ))
+    Ok((s, AttributeValuedForObjectType::NetworkNodeAttributeValue(node_name, value)))
 }
 
 fn message_definition_attribute_value(s: &str) -> IResult<&str, AttributeValuedForObjectType> {
@@ -672,10 +606,7 @@ fn message_definition_attribute_value(s: &str) -> IResult<&str, AttributeValuedF
     let (s, message_id) = message_id(s)?;
     let (s, _) = ms1(s)?;
     let (s, value) = opt(attribute_value)(s)?;
-    Ok((
-        s,
-        AttributeValuedForObjectType::MessageDefinitionAttributeValue(message_id, value),
-    ))
+    Ok((s, AttributeValuedForObjectType::MessageDefinitionAttributeValue(message_id, value)))
 }
 
 fn signal_attribute_value(s: &str) -> IResult<&str, AttributeValuedForObjectType> {
@@ -686,10 +617,7 @@ fn signal_attribute_value(s: &str) -> IResult<&str, AttributeValuedForObjectType
     let (s, signal_name) = c_ident(s)?;
     let (s, _) = ms1(s)?;
     let (s, value) = attribute_value(s)?;
-    Ok((
-        s,
-        AttributeValuedForObjectType::SignalAttributeValue(message_id, signal_name, value),
-    ))
+    Ok((s, AttributeValuedForObjectType::SignalAttributeValue(message_id, signal_name, value)))
 }
 
 fn env_variable_attribute_value(s: &str) -> IResult<&str, AttributeValuedForObjectType> {
@@ -698,17 +626,11 @@ fn env_variable_attribute_value(s: &str) -> IResult<&str, AttributeValuedForObje
     let (s, env_var_name) = c_ident(s)?;
     let (s, _) = ms1(s)?;
     let (s, value) = attribute_value(s)?;
-    Ok((
-        s,
-        AttributeValuedForObjectType::EnvVariableAttributeValue(env_var_name, value),
-    ))
+    Ok((s, AttributeValuedForObjectType::EnvVariableAttributeValue(env_var_name, value)))
 }
 
 fn raw_attribute_value(s: &str) -> IResult<&str, AttributeValuedForObjectType> {
-    map(
-        attribute_value,
-        AttributeValuedForObjectType::RawAttributeValue,
-    )(s)
+    map(attribute_value, AttributeValuedForObjectType::RawAttributeValue)(s)
 }
 
 fn attribute_value_for_object(s: &str) -> IResult<&str, AttributeValueForObject> {
@@ -726,13 +648,7 @@ fn attribute_value_for_object(s: &str) -> IResult<&str, AttributeValueForObject>
     ))(s)?;
     let (s, _) = semi_colon(s)?;
     let (s, _) = line_ending(s)?;
-    Ok((
-        s,
-        AttributeValueForObject {
-            attribute_name: attribute_name.to_string(),
-            attribute_value,
-        },
-    ))
+    Ok((s, AttributeValueForObject { attribute_name: attribute_name.to_string(), attribute_value }))
 }
 
 // TODO add properties
@@ -756,10 +672,7 @@ fn attribute_definition_environment_variable(s: &str) -> IResult<&str, Attribute
     let (s, _) = tag("EV_")(s)?;
     let (s, _) = ms1(s)?;
     let (s, env_var) = take_till(|c| is_semi_colon(c as char))(s)?;
-    Ok((
-        s,
-        AttributeDefinition::EnvironmentVariable(env_var.to_string()),
-    ))
+    Ok((s, AttributeDefinition::EnvironmentVariable(env_var.to_string())))
 }
 
 // TODO add properties
@@ -832,14 +745,7 @@ fn signal_type_ref(s: &str) -> IResult<&str, SignalTypeRef> {
     let (s, signal_type_name) = c_ident(s)?;
     let (s, _) = semi_colon(s)?;
     let (s, _) = line_ending(s)?;
-    Ok((
-        s,
-        SignalTypeRef {
-            message_id,
-            signal_name,
-            signal_type_name,
-        },
-    ))
+    Ok((s, SignalTypeRef { message_id, signal_name, signal_type_name }))
 }
 
 fn value_table(s: &str) -> IResult<&str, ValueTable> {
@@ -850,13 +756,7 @@ fn value_table(s: &str) -> IResult<&str, ValueTable> {
     let (s, value_descriptions) =
         many_till(preceded(ms0, value_description), preceded(ms0, semi_colon))(s)?;
     let (s, _) = line_ending(s)?;
-    Ok((
-        s,
-        ValueTable {
-            value_table_name,
-            value_descriptions: value_descriptions.0,
-        },
-    ))
+    Ok((s, ValueTable { value_table_name, value_descriptions: value_descriptions.0 }))
 }
 
 fn extended_multiplex_mapping(s: &str) -> IResult<&str, ExtendedMultiplexMapping> {
@@ -864,13 +764,7 @@ fn extended_multiplex_mapping(s: &str) -> IResult<&str, ExtendedMultiplexMapping
     let (s, min_value) = complete::u64(s)?;
     let (s, _) = char('-')(s)?;
     let (s, max_value) = complete::u64(s)?;
-    Ok((
-        s,
-        ExtendedMultiplexMapping {
-            min_value,
-            max_value,
-        },
-    ))
+    Ok((s, ExtendedMultiplexMapping { min_value, max_value }))
 }
 
 fn extended_multiplex(s: &str) -> IResult<&str, ExtendedMultiplex> {
@@ -886,15 +780,7 @@ fn extended_multiplex(s: &str) -> IResult<&str, ExtendedMultiplex> {
     let (s, mappings) = separated_list0(tag(","), extended_multiplex_mapping)(s)?;
     let (s, _) = semi_colon(s)?;
     let (s, _) = line_ending(s)?;
-    Ok((
-        s,
-        ExtendedMultiplex {
-            message_id,
-            signal_name,
-            multiplexor_signal_name,
-            mappings,
-        },
-    ))
+    Ok((s, ExtendedMultiplex { message_id, signal_name, multiplexor_signal_name, mappings }))
 }
 
 fn signed_or_unsigned_integer(s: &str) -> IResult<&str, SignalExtendedValueType> {
@@ -908,11 +794,7 @@ fn ieee_double_64bit(s: &str) -> IResult<&str, SignalExtendedValueType> {
 }
 
 fn signal_extended_value_type(s: &str) -> IResult<&str, SignalExtendedValueType> {
-    alt((
-        signed_or_unsigned_integer,
-        ieee_float_32bit,
-        ieee_double_64bit,
-    ))(s)
+    alt((signed_or_unsigned_integer, ieee_float_32bit, ieee_double_64bit))(s)
 }
 
 fn signal_extended_value_type_list(s: &str) -> IResult<&str, SignalExtendedValueTypeList> {
@@ -928,14 +810,7 @@ fn signal_extended_value_type_list(s: &str) -> IResult<&str, SignalExtendedValue
     let (s, signal_extended_value_type) = signal_extended_value_type(s)?;
     let (s, _) = semi_colon(s)?;
     let (s, _) = line_ending(s)?;
-    Ok((
-        s,
-        SignalExtendedValueTypeList {
-            message_id,
-            signal_name,
-            signal_extended_value_type,
-        },
-    ))
+    Ok((s, SignalExtendedValueTypeList { message_id, signal_name, signal_extended_value_type }))
 }
 
 fn transmitter_vector_xxx(s: &str) -> IResult<&str, Transmitter> {
@@ -965,13 +840,7 @@ fn message_transmitter(s: &str) -> IResult<&str, MessageTransmitter> {
     let (s, transmitter) = message_transmitters(s)?;
     let (s, _) = semi_colon(s)?;
     let (s, _) = line_ending(s)?;
-    Ok((
-        s,
-        MessageTransmitter {
-            message_id,
-            transmitter,
-        },
-    ))
+    Ok((s, MessageTransmitter { message_id, transmitter }))
 }
 
 fn signal_groups(s: &str) -> IResult<&str, SignalGroups> {
@@ -989,15 +858,7 @@ fn signal_groups(s: &str) -> IResult<&str, SignalGroups> {
     let (s, signal_names) = separated_list0(ms1, c_ident)(s)?;
     let (s, _) = semi_colon(s)?;
     let (s, _) = line_ending(s)?;
-    Ok((
-        s,
-        SignalGroups {
-            message_id,
-            signal_group_name,
-            repetitions,
-            signal_names,
-        },
-    ))
+    Ok((s, SignalGroups { message_id, signal_group_name, repetitions, signal_names }))
 }
 
 pub fn dbc_from_str(dbc_str: &str) -> Result<DbcObject, DbcError<'_>> {
@@ -1023,7 +884,7 @@ pub fn dbc_from_str(dbc_str: &str) -> Result<DbcObject, DbcError<'_>> {
                     });
                 }
             };
-        },
+        }
         Err(error) => {
             return Err(DbcError {
                 uid: "parsing-fail",

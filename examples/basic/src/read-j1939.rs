@@ -62,7 +62,7 @@ fn main() -> Result<(), String> {
                 println!("{}", error)
             }
             // if packet is partial just silently ignore it
-            _ => {},
+            _ => {}
         };
     }
 }

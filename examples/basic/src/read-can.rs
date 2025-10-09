@@ -9,8 +9,7 @@
 extern crate sockcan;
 use sockcan::prelude::*;
 
-
-fn main() -> Result <(), String> {
+fn main() -> Result<(), String> {
     const VCAN: &str = "vcan0";
 
     let sockfd = match SockCanHandle::open_raw(VCAN, CanTimeStamp::CLASSIC) {
@@ -28,24 +27,39 @@ fn main() -> Result <(), String> {
     }
 
     // check a full frame
-    let frame= sockfd.get_can_frame();
-    let frame_id= frame.get_id().unwrap();
-    let frame_len= frame.get_len().unwrap();
-    let frame_stamp=frame.get_stamp();
-    let frame_data=frame.get_data();
-    let frame_source= sockfd.get_ifname(frame.get_iface()).unwrap();
-    println!("Received FdFrame id:{:#04x} stamp:{} source:{} len:{} data:{:?}", frame_id, frame_stamp, frame_source, frame_len, frame_data);
+    let frame = sockfd.get_can_frame();
+    let frame_id = frame.get_id().unwrap();
+    let frame_len = frame.get_len().unwrap();
+    let frame_stamp = frame.get_stamp();
+    let frame_data = frame.get_data();
+    let frame_source = sockfd.get_ifname(frame.get_iface()).unwrap();
+    println!(
+        "Received FdFrame id:{:#04x} stamp:{} source:{} len:{} data:{:?}",
+        frame_id, frame_stamp, frame_source, frame_len, frame_data
+    );
 
-    println! ("Waiting for Raw CAN package");
+    println!("Waiting for Raw CAN package");
     loop {
-        let frame= sockfd.get_can_frame();
-        let frame_stamp=frame.get_stamp();
-        let frame_data=frame.get_data();
+        let frame = sockfd.get_can_frame();
+        let frame_stamp = frame.get_stamp();
+        let frame_data = frame.get_data();
         match frame.get_raw() {
-            CanAnyFrame::RawFd(frame) => println!("Received FdFrame id:{:#04x} stamp:{} len:{} data:{:?}", frame.get_id(), frame_stamp, frame.get_len(), frame_data),
-            CanAnyFrame::RawStd(frame) => println!("Received StdFrame id:{:#04x} stamp:{}, len:{} data:{:?}", frame.get_id(), frame_stamp, frame.get_len(), frame_data),
+            CanAnyFrame::RawFd(frame) => println!(
+                "Received FdFrame id:{:#04x} stamp:{} len:{} data:{:?}",
+                frame.get_id(),
+                frame_stamp,
+                frame.get_len(),
+                frame_data
+            ),
+            CanAnyFrame::RawStd(frame) => println!(
+                "Received StdFrame id:{:#04x} stamp:{}, len:{} data:{:?}",
+                frame.get_id(),
+                frame_stamp,
+                frame.get_len(),
+                frame_data
+            ),
             CanAnyFrame::Err(error) => panic!("Fail reading candev Error:{}", error.to_string()),
             CanAnyFrame::None(canid) => println!("Received Timeout id:{:#04x}", *canid),
         }
-    };
+    }
 }

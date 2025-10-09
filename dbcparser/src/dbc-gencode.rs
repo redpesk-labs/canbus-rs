@@ -243,12 +243,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
             msg.get_type_kamel(),
             self.get_type_kamel()
         )?;
-        code_output!(
-            code,
-            IDT1,
-            "impl CanDbcSignal for {} {{\n",
-            self.get_type_kamel()
-        )?;
+        code_output!(code, IDT1, "impl CanDbcSignal for {} {{\n", self.get_type_kamel())?;
         code_output!(code, IDT2, "fn get_name(&self) -> &'static str {")?;
         code_output!(code, IDT3, "self.name")?;
         code_output!(code, IDT2, "}\n")?;
@@ -266,11 +261,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
         code_output!(code, IDT2, "}\n")?;
 
         //signal update
-        code_output!(
-            code,
-            IDT2,
-            "fn update(&mut self, frame: &CanMsgData) -> i32 {"
-        )?;
+        code_output!(code, IDT2, "fn update(&mut self, frame: &CanMsgData) -> i32 {")?;
 
         let read_fn = match self.byte_order {
             ByteOrder::LittleEndian => {
@@ -361,12 +352,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
             IDT2,
             "fn set_value(&mut self, value:CanDbcType, data:&mut [u8]) -> Result<(),CanError> {"
         )?;
-        code_output!(
-            code,
-            IDT3,
-            "let value:{}= match value.cast() {{",
-            self.get_data_type()
-        )?;
+        code_output!(code, IDT3, "let value:{}= match value.cast() {{", self.get_data_type())?;
         code_output!(code, IDT4, "Ok(val) => val,")?;
         code_output!(code, IDT4, "Err(error) => return Err(error)")?;
         code_output!(code, IDT3, "};")?;
@@ -401,11 +387,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
         code_output!(code, IDT2, "}\n")?;
 
         // set signal notification callback
-        code_output!(
-            code,
-            IDT2,
-            "fn set_callback(&mut self, callback: Box<dyn CanSigCtrl>)  {"
-        )?;
+        code_output!(code, IDT2, "fn set_callback(&mut self, callback: Box<dyn CanSigCtrl>)  {")?;
         code_output!(code, IDT3, "self.callback= Some(RefCell::new(callback));")?;
         code_output!(code, IDT2, "}\n")?;
 
@@ -449,9 +431,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
     }
 
     fn gen_signal_enum(&self, code: &DbcCodeGen, msg: &Message) -> io::Result<()> {
-        if let Some(variants) = code
-            .dbcfd
-            .value_descriptions_for_signal(msg.id, self.name.as_str())
+        if let Some(variants) = code.dbcfd.value_descriptions_for_signal(msg.id, self.name.as_str())
         {
             code_output!(
                 code,
@@ -517,13 +497,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
 
     fn gen_signal_impl(&self, code: &DbcCodeGen, msg: &Message) -> io::Result<()> {
         // signal comments and metadata
-        code_output!(
-            code,
-            IDT1,
-            "/// {}::{}",
-            msg.get_type_kamel(),
-            self.get_type_kamel()
-        )?;
+        code_output!(code, IDT1, "/// {}::{}", msg.get_type_kamel(), self.get_type_kamel())?;
         if let Some(comment) = code.dbcfd.signal_comment(msg.id, self.name.as_str()) {
             code_output!(code, IDT1, "///")?;
             for line in comment.trim().lines() {
@@ -547,11 +521,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
         if code.serde_json {
             code_output!(code, IDT2, "#[serde(skip)]")?;
         }
-        code_output!(
-            code,
-            IDT2,
-            "callback: Option<RefCell<Box<dyn CanSigCtrl>>>,"
-        )?;
+        code_output!(code, IDT2, "callback: Option<RefCell<Box<dyn CanSigCtrl>>>,")?;
         code_output!(code, IDT2, "status: CanDataStatus,")?;
         code_output!(code, IDT2, "name: &'static str,")?;
         code_output!(code, IDT2, "stamp: u64,")?;
@@ -562,17 +532,8 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
 
         // start signal implementation
         code_output!(code, IDT1, "impl {}  {{", self.get_type_kamel())?;
-        code_output!(
-            code,
-            IDT2,
-            "pub fn new() -> Rc<RefCell<Box<dyn CanDbcSignal>>> {"
-        )?;
-        code_output!(
-            code,
-            IDT3,
-            "Rc::new(RefCell::new(Box::new({} {{",
-            self.get_type_kamel()
-        )?;
+        code_output!(code, IDT2, "pub fn new() -> Rc<RefCell<Box<dyn CanDbcSignal>>> {")?;
+        code_output!(code, IDT3, "Rc::new(RefCell::new(Box::new({} {{", self.get_type_kamel())?;
         code_output!(code, IDT4, "status: CanDataStatus::Unset,")?;
         //code_output!(code, IDT4, "uid: DbcSignal::{},",)?;
         code_output!(code, IDT4, "name:\"{}\",", self.get_type_kamel())?;
@@ -594,10 +555,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
         }
         code_output!(code, IDT2, "}\n")?;
 
-
-        if let Some(variants) = code
-            .dbcfd
-            .value_descriptions_for_signal(msg.id, self.name.as_str())
+        if let Some(variants) = code.dbcfd.value_descriptions_for_signal(msg.id, self.name.as_str())
         {
             code_output!(
                 code,
@@ -700,12 +658,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
         }
 
         // signal get typed_value
-        code_output!(
-            code,
-            IDT2,
-            "fn get_typed_value(&self) -> {} {{",
-            self.get_data_type()
-        )?;
+        code_output!(code, IDT2, "fn get_typed_value(&self) -> {} {{", self.get_data_type())?;
         code_output!(code, IDT3, "self.value")?;
         code_output!(code, IDT2, "}\n")?;
 
@@ -819,17 +772,8 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
         }
 
         // fmt display for signal
-        code_output!(
-            code,
-            IDT1,
-            "impl fmt::Display for {} {{",
-            self.get_type_kamel()
-        )?;
-        code_output!(
-            code,
-            IDT2,
-            "fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {"
-        )?;
+        code_output!(code, IDT1, "impl fmt::Display for {} {{", self.get_type_kamel())?;
+        code_output!(code, IDT2, "fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {")?;
         code_output!(
             code,
             IDT3,
@@ -841,23 +785,13 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
         code_output!(code, IDT1, "}\n")?;
 
         // fmt debug for signal
-        code_output!(
-            code,
-            IDT1,
-            "impl fmt::Debug for {} {{",
-            self.get_type_kamel()
-        )?;
+        code_output!(code, IDT1, "impl fmt::Debug for {} {{", self.get_type_kamel())?;
         code_output!(
             code,
             IDT2,
             "fn fmt(&self, format: &mut fmt::Formatter<'_>) -> fmt::Result {"
         )?;
-        code_output!(
-            code,
-            IDT3,
-            "format.debug_struct(\"{}\")",
-            self.get_type_kamel()
-        )?;
+        code_output!(code, IDT3, "format.debug_struct(\"{}\")", self.get_type_kamel())?;
 
         code_output!(code, IDT4, ".field(\"val\", &self.get_typed_value())")?;
         code_output!(code, IDT4, ".field(\"stamp\", &self.get_stamp())")?;
@@ -879,11 +813,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
 impl MsgCodeGen<&DbcCodeGen> for Message {
     fn gen_can_dbc_impl(&self, code: &DbcCodeGen) -> io::Result<()> {
         code_output!(code, IDT1, "pub struct DbcMessage {")?;
-        code_output!(
-            code,
-            IDT2,
-            "callback: Option<RefCell<Box<dyn CanMsgCtrl>>>,"
-        )?;
+        code_output!(code, IDT2, "callback: Option<RefCell<Box<dyn CanMsgCtrl>>>,")?;
         code_output!(
             code,
             IDT2,
@@ -900,11 +830,7 @@ impl MsgCodeGen<&DbcCodeGen> for Message {
         code_output!(code, IDT1, "impl DbcMessage {")?;
 
         // instantiate an empty message
-        code_output!(
-            code,
-            IDT2,
-            "pub fn new() -> Rc<RefCell<Box <dyn CanDbcMessage>>> {"
-        )?;
+        code_output!(code, IDT2, "pub fn new() -> Rc<RefCell<Box <dyn CanDbcMessage>>> {")?;
         code_output!(code, IDT3, "Rc::new(RefCell::new(Box::new (DbcMessage {")?;
         code_output!(code, IDT4, "id: {},", self.id.to_u32())?;
         code_output!(code, IDT4, "name: \"{}\",", self.get_type_kamel())?;
@@ -925,11 +851,7 @@ impl MsgCodeGen<&DbcCodeGen> for Message {
             .signals
             .iter()
             .filter_map(|signal| {
-                Some(format!(
-                    "{}: {}",
-                    signal.get_type_snake(),
-                    signal.get_data_type()
-                ))
+                Some(format!("{}: {}", signal.get_type_snake(), signal.get_data_type()))
             })
             .collect();
 
@@ -1017,11 +939,7 @@ impl MsgCodeGen<&DbcCodeGen> for Message {
                 idx
             )?;
 
-            code_output!(
-                code,
-                IDT4,
-                "Ok(mut signal) => self.listeners += signal.update(frame),",
-            )?;
+            code_output!(code, IDT4, "Ok(mut signal) => self.listeners += signal.update(frame),",)?;
             code_output!(
                 code,
                 IDT4,
@@ -1064,11 +982,7 @@ impl MsgCodeGen<&DbcCodeGen> for Message {
         code_output!(code, IDT2, "}\n")?;
 
         // set message notification callback
-        code_output!(
-            code,
-            IDT2,
-            "fn set_callback(&mut self, callback: Box<dyn CanMsgCtrl>)  {"
-        )?;
+        code_output!(code, IDT2, "fn set_callback(&mut self, callback: Box<dyn CanMsgCtrl>)  {")?;
         code_output!(code, IDT3, "self.callback= Some(RefCell::new(callback));")?;
         code_output!(code, IDT2, "}\n")?;
 
@@ -1097,12 +1011,7 @@ impl MsgCodeGen<&DbcCodeGen> for Message {
         code_output!(code, IDT3, "self")?;
         code_output!(code, IDT2, "}\n")?;
 
-        code_output!(
-            code,
-            IDT1,
-            "}} // end {} impl for CanDbcMessage",
-            self.get_type_kamel()
-        )?;
+        code_output!(code, IDT1, "}} // end {} impl for CanDbcMessage", self.get_type_kamel())?;
         Ok(())
     }
 
@@ -1122,12 +1031,7 @@ impl MsgCodeGen<&DbcCodeGen> for Message {
         }
 
         // per message module/name-space
-        code_output!(
-            code,
-            IDT0,
-            "pub mod {} {{ /// Message name space",
-            self.get_type_kamel()
-        )?;
+        code_output!(code, IDT0, "pub mod {} {{ /// Message name space", self.get_type_kamel())?;
         code_output!(code, IDT1, "use sockcan::prelude::*;")?;
         code_output!(code, IDT1, "use bitvec::prelude::*;")?;
         code_output!(code, IDT1, "use std::any::Any;")?;
@@ -1317,11 +1221,7 @@ impl DbcParser {
             IDT0,
             "// --------------------------------------------------------------",
         )?;
-        code_output!(
-            code,
-            IDT0,
-            "//       WARNING: Manual modification will be destroyed",
-        )?;
+        code_output!(code, IDT0, "//       WARNING: Manual modification will be destroyed",)?;
         code_output!(
             code,
             IDT0,
@@ -1334,16 +1234,8 @@ impl DbcParser {
             infile,
             get_time("%c").unwrap()
         )?;
-        code_output!(
-            code,
-            IDT0,
-            "// - update only with [dbc-parser|build.rs::DbcParser]",
-        )?;
-        code_output!(
-            code,
-            IDT0,
-            "// - source code: https://github.com/redpesk-labs/canbus-rs",
-        )?;
+        code_output!(code, IDT0, "// - update only with [dbc-parser|build.rs::DbcParser]",)?;
+        code_output!(code, IDT0, "// - source code: https://github.com/redpesk-labs/canbus-rs",)?;
         code_output!(
             code,
             IDT0,
@@ -1395,12 +1287,8 @@ impl DbcParser {
         code_output!(code, IDT0, "impl CanMsgPool {")?;
 
         // extract canid from messages vector
-        let canids: Vec<u32> = code
-            .dbcfd
-            .messages
-            .iter()
-            .filter_map(|msg| Some(msg.id.to_u32()))
-            .collect();
+        let canids: Vec<u32> =
+            code.dbcfd.messages.iter().filter_map(|msg| Some(msg.id.to_u32())).collect();
 
         code_output!(code, IDT1, "pub fn new(uid: &'static str) -> Self {")?;
         code_output!(code, IDT2, "CanMsgPool {")?;
