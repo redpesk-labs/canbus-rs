@@ -11,7 +11,7 @@
  *
  * Reference: http://mcu.so/Microcontroller/Automotive/dbc-file-format-documentation_compress.pdf
  */
-use data::*;
+use crate::data::*;
 use heck::*;
 use sockcan::prelude::get_time;
 use std::fs::File;
@@ -54,7 +54,6 @@ const KEYWORDS: [&str; 53] = [
     "_other",
 ];
 
-pub use code_output;
 #[macro_export]
 macro_rules! code_output {
  ($code:ident, $indent:ident, $format:expr, $( $args:expr ),*) => {

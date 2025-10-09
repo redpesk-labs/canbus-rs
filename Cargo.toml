@@ -7,3 +7,8 @@ members = [
     "examples/model3",
     "examples/bms",
 ]
+
+resolver = "2"
+
+[workspace.package]
+edition = "2021"

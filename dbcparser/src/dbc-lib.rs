@@ -8,25 +8,32 @@
  * License: $RP_BEGIN_LICENSE$ SPDX:MIT https://opensource.org/licenses/MIT $RP_END_LICENSE$
  */
 
-#![doc(html_logo_url = "https://iot.bzh/images/defaults/company/512-479-max-transp.png", html_favicon_url = "https://iot.bzh/images/defaults/favicon.ico")]
+
+#![doc(
+    html_logo_url = "https://iot.bzh/images/defaults/company/512-479-max-transp.png",
+    html_favicon_url = "https://iot.bzh/images/defaults/favicon.ico"
+)]
+
 extern crate nom;
-extern crate heck;
-extern crate sockcan;
 
-#[path = "./dbc-parser.rs"]
-mod parser;
+// --- Déclarations de modules (tes fichiers s'appellent dbc-*.rs)
+#[path = "dbc-data.rs"]
+pub mod data;
 
-#[path = "./dbc-data.rs"]
-mod data;
+#[path = "dbc-parser.rs"]
+pub mod parser;
 
-#[path = "./dbc-gencode.rs"]
-mod gencode;
+#[path = "dbc-gencode.rs"]
+pub mod gencode;
 
-// ! #[cfg(test)]
-// #[path = "./dbc-test.rs"]
-// pub mod dbc_test;
+// --- Re-exports (optionnels) pour l'API publique
+pub use crate::data::*;
+pub use crate::gencode::*;
+// pub use crate::parser::{dbc_from_str /*, ...*/};
 
+/// Prélude pratique pour `use dbcparser::prelude::*;`
 pub mod prelude {
-    pub use data::*;
-    pub use gencode::*;
+    pub use crate::data::*;
+    pub use crate::parser::*;
+    pub use crate::gencode::*;
 }

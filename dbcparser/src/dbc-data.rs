@@ -8,7 +8,7 @@
  * License: $RP_BEGIN_LICENSE$ SPDX:MIT https://opensource.org/licenses/MIT $RP_END_LICENSE$
  */
 
-use parser::dbc_from_str;
+use crate::parser::dbc_from_str;
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
@@ -400,7 +400,7 @@ pub struct DbcObject {
 }
 
 impl DbcObject {
-    pub fn from_file(dbcpath: &str) -> Result<DbcObject, DbcError> {
+    pub fn from_file(dbcpath: &str) -> Result<DbcObject, DbcError<'_>> {
         let filename = Box::leak(dbcpath.to_owned().into_boxed_str()) as &'static str;
         let dbc_buffer = || -> Result<Vec<u8>, io::Error> {
             let mut fd = File::open(filename)?;
@@ -424,7 +424,7 @@ impl DbcObject {
         }
     }
 
-    pub fn from_str(dbc_buffer: &str) -> Result<DbcObject, DbcError> {
+    pub fn from_str(dbc_buffer: &str) -> Result<DbcObject, DbcError<'_>> {
         dbc_from_str(dbc_buffer)
     }
 
@@ -537,7 +537,7 @@ impl DbcObject {
     pub fn message_multiplexor_switch(
         &self,
         message_id: MessageId,
-    ) -> Result<Option<&Signal>, Error> {
+    ) -> Result<Option<&Signal>, Error<'_>> {
         let message = self
             .messages
             .iter()

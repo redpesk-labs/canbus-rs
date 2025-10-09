@@ -8,7 +8,7 @@
  * License: $RP_BEGIN_LICENSE$ SPDX:MIT https://opensource.org/licenses/MIT $RP_END_LICENSE$
  */
 
-use data::*;
+use crate::data::*;
 use std::str;
 
 use nom::{
@@ -1000,7 +1000,7 @@ fn signal_groups(s: &str) -> IResult<&str, SignalGroups> {
     ))
 }
 
-pub fn dbc_from_str(dbc_str: &str) -> Result<DbcObject, DbcError> {
+pub fn dbc_from_str(dbc_str: &str) -> Result<DbcObject, DbcError<'_>> {
     match dbc_parse_str(dbc_str) {
         Ok((remaining, object)) => {
             match multispace0::<&str, ()>(remaining) {

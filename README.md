@@ -81,7 +81,7 @@ ip addr | grep "can"  ;# check interface is up
 
 * start virtual can injection
     * apt-get install can-utils;  dnf install can-utils; zypper install can-utils;
-    * canplayer vcan0=elmcan -v -I examples/demo/etc/candump/model3.log -l i -g 10
+    * canplayer vcan0=elmcan -v -I ./examples/model3/etc/candump/model3.log -l i -g 10
 
 * start can-model3
 

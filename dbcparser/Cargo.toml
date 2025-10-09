@@ -2,7 +2,7 @@
 name = "lib_dbcparser"
 authors = ["fulup@iot.bzh"]
 version = "0.1.0"
-#edition = "2021"
+edition = "2021"
 
 [dependencies]
 nom = { version = "7", features = ["alloc"] }
@@ -11,5 +11,4 @@ lib_sockcan= {path ="../sockcan"}
 
 [lib]
 name = "dbcparser"
-crate-type = ["lib"]
 path = "src/dbc-lib.rs"

@@ -9,6 +9,9 @@ bitflags = { version = "2"}
 lib_sockcan= {path ="../../sockcan"}
 lib_dbcparser= {path ="../../dbcparser"}
 
+[build-dependencies]
+lib_dbcparser = { path = "../../dbcparser" }
+
 [[bin]]
 name = "can-read"
 path = "src/read-can.rs"

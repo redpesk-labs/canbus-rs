@@ -419,7 +419,7 @@ impl SockJ1939Filters {
         self
     }
 
-    pub fn search_pgn(&self, pgn: u32) -> Result<RefMut<SockJ1939Fast>, CanError> {
+    pub fn search_pgn(&self, pgn: u32) -> Result<RefMut<'_, SockJ1939Fast>, CanError> {
         let search = self
             .fastpkg
             .binary_search_by(|pkg| pkg.borrow().pgn.cmp(&pgn));
