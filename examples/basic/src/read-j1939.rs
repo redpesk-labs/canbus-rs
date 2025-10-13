@@ -21,17 +21,17 @@ fn main() -> Result<(), String> {
     // open j1939 in promiscuous mode
     let mut sock =
         match SockCanHandle::open_j1939(VCAN, SockJ1939Addr::Promiscuous, CanTimeStamp::CLASSIC) {
-            Err(error) => return Err(format!("fail opening candev {}", error.to_string())),
+            Err(error) => return Err(format!("fail opening candev {error}")),
             Ok(value) => value,
         };
 
     // when using basic/etc/start-pgn129285.sh
     let mut filters = SockJ1939Filters::new();
     match filters
-        .add_fast(129285, 10, 128) // canboat pgn "navigationRouteWpInformation"
+        .add_fast(129_285, 10, 128) // canboat pgn "navigationRouteWpInformation"
         .apply(&sock)
     {
-        Err(error) => panic!("j1939-filter fail Error:{}", error.to_string()),
+        Err(error) => panic!("j1939-filter fail Error:{error}"),
         Ok(()) => println!("sockj1939 filter PGN=129285 ready"),
     }
 
@@ -59,10 +59,10 @@ fn main() -> Result<(), String> {
                 frame.get_data(),
             ),
             SockCanOpCode::RxError(error) => {
-                println!("{}", error)
+                println!("{error}");
             }
             // if packet is partial just silently ignore it
             _ => {}
-        };
+        }
     }
 }

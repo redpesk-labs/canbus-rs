@@ -10,12 +10,26 @@ use super::cglue;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::num::TryFromIntError;
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CanError {
     uid: String,
     info: String,
 }
+
+impl From<TryFromIntError> for CanError {
+    fn from(e: TryFromIntError) -> Self {
+        CanError::new("int-conversion", e.to_string()) // <-- sans le &
+    }
+}
+
+impl From<std::io::Error> for CanError {
+    fn from(e: std::io::Error) -> Self {
+        CanError::new("io-error", e.to_string()) // <-- sans le &
+    }
+}
+
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, Debug)]

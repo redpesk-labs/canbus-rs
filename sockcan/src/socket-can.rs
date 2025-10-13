@@ -14,10 +14,11 @@
 use bitflags::bitflags;
 use std::cell::RefCell;
 use std::ffi::CStr;
+use std::os::raw::c_char;
 
 use super::cglue;
 use crate::prelude::*;
-use std::mem::{self, MaybeUninit};
+use std::mem::{self};
 
 pub type SockCanId = cglue::canid_t;
 bitflags! {
@@ -48,7 +49,7 @@ bitflags! {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug,Copy, Clone)]
 pub enum CanTimeStamp {
     NONE,
     CLASSIC,
@@ -89,7 +90,7 @@ impl CanFrameRaw {
     }
     #[must_use]
     pub fn as_ptr(&self) -> *mut std::ffi::c_void {
-        &raw const self.0 as *const _ as *mut std::ffi::c_void
+        (&raw const self.0).cast::<std::ffi::c_void>().cast_mut()
     }
 
     #[must_use]
@@ -132,7 +133,7 @@ impl CanFdFrameRaw {
 
     #[must_use]
     pub fn as_ptr(&self) -> *mut std::ffi::c_void {
-        &raw const self.0 as *const _ as *mut std::ffi::c_void
+       (&raw const self.0).cast::<std::ffi::c_void>().cast_mut()
     }
 
     #[must_use]
@@ -210,19 +211,31 @@ impl From<CanError> for CanAnyFrame {
 }
 
 impl From<*const CanFrameRaw> for CanAnyFrame {
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     fn from(src: *const CanFrameRaw) -> Self {
-        #[allow(invalid_value)]
-        let dst: CanFrameRaw = unsafe { MaybeUninit::uninit().assume_init() };
-        unsafe { std::ptr::copy_nonoverlapping(src, &raw const dst.0 as *const _ as *mut CanFrameRaw, 1) };
+        let dst = unsafe {
+            debug_assert!(!src.is_null(), "null CanFrameRaw pointer");
+
+            let mut tmp = core::mem::MaybeUninit::<CanFrameRaw>::uninit();
+            core::ptr::copy_nonoverlapping(src, tmp.as_mut_ptr(), 1);
+            tmp.assume_init()
+        };
         CanAnyFrame::RawStd(dst)
     }
 }
 
 impl From<*const CanFdFrameRaw> for CanAnyFrame {
+    // La signature de `From::from` ne peut pas être `unsafe`, on documente
+    // et on désactive localement l’avertissement Clippy.
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     fn from(src: *const CanFdFrameRaw) -> Self {
-        #[allow(invalid_value)]
-        let dst: CanFdFrameRaw = unsafe { MaybeUninit::uninit().assume_init() };
-        unsafe { std::ptr::copy(src, &dst as *const _ as *mut CanFdFrameRaw, 1) };
+        let dst = unsafe {
+            debug_assert!(!src.is_null(), "null CanFdFrameRaw pointer");
+
+            let mut tmp = core::mem::MaybeUninit::<CanFdFrameRaw>::uninit();
+            core::ptr::copy_nonoverlapping(src, tmp.as_mut_ptr(), 1);
+            tmp.assume_init()
+        };
         CanAnyFrame::RawFd(dst)
     }
 }
@@ -380,11 +393,20 @@ impl CanIFaceFrom<&str> for SockCanHandle {
 
         let iname = iface.as_bytes();
 
-        for idx in 0..cglue::can_SOCK_x_IFACE_LEN as usize {
-            if idx == iface.len() {
-                break;
+        for (idx, &b) in iname
+            .iter()
+            .take(cglue::can_SOCK_x_IFACE_LEN as usize)
+            .enumerate()
+        {
+            // Évite cast_possible_wrap: on borne aux valeurs ASCII sûres
+            let ch: c_char = match i8::try_from(b) {
+                Ok(v) => v as c_char,
+                Err(_) => 0 as c_char, // ou `continue` si tu préfères ignorer
+            };
+
+            unsafe {
+                ifreq.ifr_ifrn.ifrn_name[idx] = ch;
             }
-            unsafe { ifreq.ifr_ifrn.ifrn_name[idx] = iname[idx] as ::std::os::raw::c_char };
         }
 
         // get Can iface index
@@ -400,14 +422,14 @@ impl CanIFaceFrom<&str> for SockCanHandle {
 
 impl CanIFaceFrom<u32> for SockCanHandle {
     fn map_can_iface(_sock: i32, iface: u32) -> i32 {
-        iface as i32
+        i32::try_from(iface).unwrap_or(i32::MAX)
     }
 }
 
 impl SockCanHandle {
     /// Opens a RAW CAN socket on the specified CAN interface.
     ///
-    /// This creates and configures a RAW CAN socket (PF_CAN/RAW), optionally
+    /// This creates and configures a RAW CAN socket (`PF_CAN/RAW`), optionally
     /// enabling timestamping according to `timestamp`, and binds it to the
     /// provided interface.
     ///
@@ -435,13 +457,12 @@ impl SockCanHandle {
     where
         SockCanHandle: CanIFaceFrom<T>,
     {
-        let sockfd = unsafe {
-            cglue::socket(
-                cglue::can_SOCK_x_PF_CAN as i32,
-                cglue::can_SOCK_x_RAW as i32,
-                cglue::can_SOCK_x_CANRAW as i32,
-            )
-        };
+        let pf_can  = i32::try_from(cglue::can_SOCK_x_PF_CAN).unwrap_or(i32::MAX);
+        let raw_ty  = i32::try_from(cglue::can_SOCK_x_RAW).unwrap_or(i32::MAX);
+        let proto   = i32::try_from(cglue::can_SOCK_x_CANRAW).unwrap_or(i32::MAX);
+
+        let sockfd = unsafe { cglue::socket(pf_can, raw_ty, proto) };
+
         if sockfd < 0 {
             return Err(CanError::new("fail-socketcan-open", cglue::get_perror()));
         }
@@ -452,16 +473,19 @@ impl SockCanHandle {
         }
 
         #[allow(invalid_value)]
-        let mut canaddr: cglue::sockaddr_can = unsafe { MaybeUninit::uninit().assume_init() };
-        canaddr.can_family = cglue::can_SOCK_x_PF_CAN as u16;
+        let mut canaddr: cglue::sockaddr_can = unsafe { std::mem::zeroed() };
+
+        let fam = u16::try_from(cglue::can_SOCK_x_PF_CAN).map_err(CanError::from)?;
+        canaddr.can_family = fam;
+
         canaddr.can_ifindex = index;
 
         let sockaddr = cglue::__CONST_SOCKADDR_ARG {
-            __sockaddr__: &canaddr as *const _ as *const cglue::sockaddr,
+            __sockaddr__: (&raw const canaddr).cast::<cglue::sockaddr>(),
         };
-        let status = unsafe {
-            cglue::bind(sockfd, sockaddr, mem::size_of::<cglue::sockaddr_can>() as cglue::socklen_t)
-        };
+        let socklen = cglue::socklen_t::try_from(mem::size_of::<cglue::sockaddr_can>())
+            .map_err(CanError::from)?;
+        let status = unsafe { cglue::bind(sockfd, sockaddr, socklen) };
         if status < 0 {
             return Err(CanError::new("fail-socketcan-bind", cglue::get_perror()));
         }
@@ -514,7 +538,8 @@ impl SockCanHandle {
         if rc < 0 {
             Err(CanError::new("can-ifname-fail", cglue::get_perror()))
         } else {
-            let cstring = unsafe { CStr::from_ptr(&ifreq.ifr_ifrn.ifrn_name as *const i8) };
+                let name_ptr = unsafe { core::ptr::addr_of!(ifreq.ifr_ifrn.ifrn_name).cast::<std::os::raw::c_char>() };
+                let cstring  = unsafe { CStr::from_ptr(name_ptr) };
             match cstring.to_str() {
                 Err(error) => Err(CanError::new("can-ifname-invalid", error.to_string())),
                 Ok(slice) => Ok(slice.to_owned()),
@@ -543,19 +568,21 @@ impl SockCanHandle {
     /// - an unexpected OS error occurs while toggling non-blocking mode.
     pub fn set_blocking(&mut self, blocking: bool) -> Result<&mut Self, CanError> {
         // retrieve current flags
-        let current_flag = unsafe { cglue::fcntl(self.sockfd, cglue::can_SOCK_x_F_GETFL as i32) };
+        let f_getfl: i32 = i32::try_from(cglue::can_SOCK_x_F_GETFL).unwrap_or(i32::MAX);
+        let current_flag = unsafe { cglue::fcntl(self.sockfd, f_getfl) };
         if current_flag < 0 {
             return Err(CanError::new("can-nonblock-fail", cglue::get_perror()));
         }
 
+        let nb: i32 = i32::try_from(cglue::can_SOCK_x_NONBLOCK).unwrap_or(i32::MAX);
         let new_flag = if blocking {
-            current_flag & !cglue::can_SOCK_x_NONBLOCK as i32
+            current_flag & !nb
         } else {
-            current_flag | cglue::can_SOCK_x_NONBLOCK as i32
+            current_flag | nb
         };
 
-        let status =
-            unsafe { cglue::fcntl(self.sockfd, cglue::can_SOCK_x_F_SETFL as i32, new_flag) };
+        let f_set_fl: i32 = i32::try_from(cglue::can_SOCK_x_F_SETFL).unwrap_or(i32::MAX);
+        let status = unsafe { cglue::fcntl(self.sockfd, f_set_fl, new_flag) };
         if status < 0 {
             return Err(CanError::new("can-nonblock-fail", cglue::get_perror()));
         }
@@ -588,10 +615,10 @@ impl SockCanHandle {
             unsafe {
                 let status = cglue::setsockopt(
                     self.sockfd,
-                    cglue::can_SOCK_x_SOL_SOCKET as ::std::os::raw::c_int,
-                    cglue::can_SOCK_x_SO_RCVTIMEO as ::std::os::raw::c_int,
-                    &timout as *const _ as *const ::std::os::raw::c_void,
-                    mem::size_of::<cglue::timeval>() as cglue::socklen_t,
+                    i32::try_from(cglue::can_SOCK_x_SOL_SOCKET).unwrap_or(i32::MAX),
+                    i32::try_from(cglue::can_SOCK_x_SO_RCVTIMEO).unwrap_or(i32::MAX),
+                    core::ptr::addr_of!(timout).cast::<::std::os::raw::c_void>(),
+                    cglue::socklen_t::try_from(mem::size_of::<cglue::timeval>()).unwrap_or(u32::MAX),
                 );
 
                 if status < 0 {
@@ -606,10 +633,10 @@ impl SockCanHandle {
             unsafe {
                 let status = cglue::setsockopt(
                     self.sockfd,
-                    cglue::can_SOCK_x_SOL_SOCKET as ::std::os::raw::c_int,
-                    cglue::can_SOCK_x_SO_SNDTIMEO as ::std::os::raw::c_int,
-                    &timout as *const _ as *const ::std::os::raw::c_void,
-                    mem::size_of::<cglue::timeval>() as cglue::socklen_t,
+                    i32::try_from(cglue::can_SOCK_x_SOL_SOCKET).unwrap_or(i32::MAX),
+                    i32::try_from(cglue::can_SOCK_x_SO_SNDTIMEO).unwrap_or(i32::MAX),
+                    core::ptr::addr_of!(timout).cast::<::std::os::raw::c_void>(),
+                    cglue::socklen_t::try_from(mem::size_of::<cglue::timeval>()).unwrap_or(u32::MAX),
                 );
 
                 if status < 0 {
@@ -643,10 +670,10 @@ impl SockCanHandle {
         let status = unsafe {
             cglue::setsockopt(
                 self.sockfd,
-                cglue::can_RAW_x_SOL_CAN_RAW as i32,
-                cglue::can_RAW_x_RECV_OWN_MSGS as i32,
-                &flag as *const _ as *const std::ffi::c_void,
-                mem::size_of::<i32>() as u32,
+                i32::try_from(cglue::can_RAW_x_SOL_CAN_RAW).unwrap_or(i32::MAX),
+                i32::try_from(cglue::can_RAW_x_RECV_OWN_MSGS).unwrap_or(i32::MAX),
+                core::ptr::addr_of!(flag).cast::<std::ffi::c_void>(),
+                cglue::socklen_t::try_from(mem::size_of::<i32>()).unwrap_or(u32::MAX),
             )
         };
         if status < 0 {
@@ -657,7 +684,7 @@ impl SockCanHandle {
     /// Enables kernel timestamping on the RAW CAN socket.
     ///
     /// Depending on `timestamp`, this configures which timestamping mode the socket
-    /// should use (e.g., software timestamps, SO_TIMESTAMPNS, SO_TIMESTAMPING).
+    /// should use (e.g., software timestamps, `so_timestampns`, `SO_TIMESTAMPING`).
     ///
     /// # Parameters
     /// - `timestamp`: Desired timestamping policy (see `CanTimeStamp`).
@@ -678,10 +705,10 @@ impl SockCanHandle {
                 unsafe {
                     cglue::setsockopt(
                         self.sockfd,
-                        cglue::can_SOCK_x_SOL_SOCKET as i32,
-                        cglue::can_RAW_x_SO_TIMESTAMPING as i32,
-                        &flag as *const _ as *const std::ffi::c_void,
-                        mem::size_of::<i32>() as u32,
+                        i32::try_from(cglue::can_SOCK_x_SOL_SOCKET).unwrap_or(i32::MAX),
+                        i32::try_from(cglue::can_RAW_x_SO_TIMESTAMPING).unwrap_or(i32::MAX),
+                        (&raw const flag).cast::<std::ffi::c_void>(),
+                        cglue::socklen_t::try_from(mem::size_of::<i32>()).unwrap_or(u32::MAX),
                     )
                 }
             }
@@ -690,34 +717,34 @@ impl SockCanHandle {
                 unsafe {
                     cglue::setsockopt(
                         self.sockfd,
-                        cglue::can_SOCK_x_SOL_SOCKET as i32,
-                        cglue::can_RAW_x_SO_TIMESTAMPING as i32,
-                        &flag as *const _ as *const std::ffi::c_void,
-                        mem::size_of::<i32>() as u32,
+                        i32::try_from(cglue::can_SOCK_x_SOL_SOCKET).unwrap_or(i32::MAX),
+                        i32::try_from(cglue::can_RAW_x_SO_TIMESTAMPING).unwrap_or(i32::MAX),
+                        (&raw const flag).cast::<std::ffi::c_void>(),
+                        cglue::socklen_t::try_from(mem::size_of::<i32>()).unwrap_or(u32::MAX),
                     )
                 }
             }
             CanTimeStamp::NANOSEC => {
-                let flag = 1 as u32;
+                let flag = 1_u32;
                 unsafe {
                     cglue::setsockopt(
                         self.sockfd,
-                        cglue::can_SOCK_x_SOL_SOCKET as i32,
-                        cglue::can_RAW_x_SO_TIMESTAMPNS as i32,
-                        &flag as *const _ as *const std::ffi::c_void,
-                        mem::size_of::<i32>() as u32,
+                        i32::try_from(cglue::can_SOCK_x_SOL_SOCKET).unwrap_or(i32::MAX),
+                        i32::try_from(cglue::can_RAW_x_SO_TIMESTAMPNS).unwrap_or(i32::MAX),
+                        (&raw const flag).cast::<std::ffi::c_void>(),
+                        cglue::socklen_t::try_from(mem::size_of::<i32>()).unwrap_or(u32::MAX),
                     )
                 }
             }
             CanTimeStamp::CLASSIC => {
-                let flag = 1 as u32;
+                let flag: u32 = 1;
                 unsafe {
                     cglue::setsockopt(
                         self.sockfd,
-                        cglue::can_SOCK_x_SOL_SOCKET as i32,
-                        cglue::can_RAW_x_SO_TIMESTAMP as i32,
-                        &flag as *const _ as *const std::ffi::c_void,
-                        mem::size_of::<i32>() as u32,
+                        i32::try_from(cglue::can_SOCK_x_SOL_SOCKET).unwrap_or(i32::MAX),
+                        i32::try_from(cglue::can_RAW_x_SO_TIMESTAMP).unwrap_or(i32::MAX),
+                        (&raw const flag).cast::<std::ffi::c_void>(),
+                        cglue::socklen_t::try_from(core::mem::size_of::<u32>()).unwrap_or(u32::MAX),
                     )
                 }
             }
@@ -747,15 +774,15 @@ impl SockCanHandle {
     /// - the provided mask is empty/invalid for this platform;
     /// - the socket handle is not a valid CAN RAW socket;
     /// - the size of the option value does not match what the kernel expects.
-    pub fn set_monitoring(&mut self, mask: CanErrorMask) -> Result<&mut Self, CanError> {
+    pub fn set_monitoring(&mut self, mask: &CanErrorMask) -> Result<&mut Self, CanError> {
         let flag = mask.bits();
         let status = unsafe {
             cglue::setsockopt(
                 self.sockfd,
-                cglue::can_RAW_x_SOL_CAN_RAW as i32,
-                mask.bits() as i32,
-                &flag as *const _ as *const std::ffi::c_void,
-                mem::size_of::<u32>() as u32,
+                i32::try_from(cglue::can_RAW_x_SOL_CAN_RAW).unwrap_or(i32::MAX),
+                i32::try_from(mask.bits()).unwrap_or(i32::MAX),
+                (&raw const flag).cast::<std::ffi::c_void>(),
+                cglue::socklen_t::try_from(std::mem::size_of::<u32>()).unwrap_or(u32::MAX),
             )
         };
         if status < 0 {
@@ -766,20 +793,23 @@ impl SockCanHandle {
 
     pub fn get_any_frame(&self) -> CanAnyFrame {
         #[allow(invalid_value)]
-        let buffer: [u8; cglue::can_MTU_x_FD_MTU as usize] =
-            unsafe { MaybeUninit::uninit().assume_init() };
+        let buffer = [0u8; cglue::can_MTU_x_FD_MTU as usize];
         let count = unsafe {
             cglue::read(
                 self.sockfd,
-                &buffer as *const _ as *mut std::ffi::c_void,
+                (&raw const buffer).cast::<std::ffi::c_void>().cast_mut(),
                 cglue::can_MTU_x_FD_MTU as usize,
             )
         };
 
-        if count == mem::size_of::<CanFrameRaw>() as isize {
-            CanAnyFrame::from(&buffer as *const _ as *const CanFrameRaw)
-        } else if count == mem::size_of::<CanFdFrameRaw>() as isize {
-            CanAnyFrame::from(&buffer as *const _ as *const CanFdFrameRaw)
+        let sz_std  = isize::try_from(std::mem::size_of::<CanFrameRaw>()).unwrap_or(isize::MAX);
+        let sz_fd   = isize::try_from(std::mem::size_of::<CanFdFrameRaw>()).unwrap_or(isize::MAX);
+
+        #[allow(clippy::cast_ptr_alignment)]
+        if count == sz_std {
+            CanAnyFrame::from((&raw const buffer).cast::<CanFrameRaw>())
+        } else if count == sz_fd {
+            CanAnyFrame::from((&raw const buffer).cast::<CanFdFrameRaw>())
         } else {
             CanAnyFrame::Err(CanError::new("can-invalid-frame", cglue::get_perror()))
         }
@@ -787,35 +817,31 @@ impl SockCanHandle {
 
     pub fn get_raw_frame(&self, buffer: &mut [u8]) -> CanRecvInfo {
         let mut info: CanRecvInfo = unsafe { mem::zeroed::<CanRecvInfo>() };
-        let size = buffer.len() as u32;
+        let _size = u32::try_from(buffer.len()).unwrap_or(u32::MAX);
 
-        let iovec = cglue::iovec {
-            iov_base: buffer as *const _ as *mut std::ffi::c_void,
-            iov_len: size as usize,
+        let mut control: cglue::can_stamp_msg = unsafe { std::mem::zeroed() };
+        let mut canaddr: cglue::sockaddr_can   = unsafe { std::mem::zeroed() };
+        let mut msg_hdr: cglue::msghdr         = unsafe { std::mem::zeroed() };
+
+        msg_hdr.msg_flags = 0;
+        let mut iov = cglue::iovec {
+            iov_base: buffer.as_mut_ptr().cast(),
+            iov_len: buffer.len(),
         };
 
-        #[allow(invalid_value)]
-        let control: cglue::can_stamp_msg = unsafe { MaybeUninit::uninit().assume_init() };
-
-        #[allow(invalid_value)]
-        let canaddr: cglue::sockaddr_can = unsafe { MaybeUninit::uninit().assume_init() };
-
-        #[allow(invalid_value)]
-        let mut msg_hdr: cglue::msghdr = unsafe { mem::zeroed() };
-        msg_hdr.msg_flags = 0;
-        msg_hdr.msg_iov = &iovec as *const _ as *mut cglue::iovec;
-        msg_hdr.msg_iovlen = 1;
-        msg_hdr.msg_namelen = mem::size_of::<cglue::sockaddr_can>() as cglue::socklen_t;
-        msg_hdr.msg_name = &canaddr as *const _ as *mut std::ffi::c_void;
-        msg_hdr.msg_control = &control as *const _ as *mut std::ffi::c_void;
-        msg_hdr.msg_controllen = mem::size_of::<cglue::can_stamp_msg>();
+        msg_hdr.msg_iov      = core::ptr::addr_of_mut!(iov);
+        msg_hdr.msg_iovlen   = 1;
+        msg_hdr.msg_namelen  = cglue::socklen_t::try_from(std::mem::size_of::<cglue::sockaddr_can>()).unwrap_or(u32::MAX);
+        msg_hdr.msg_name     = core::ptr::addr_of_mut!(canaddr).cast::<std::ffi::c_void>();
+        msg_hdr.msg_control  = core::ptr::addr_of_mut!(control).cast::<std::ffi::c_void>();
+        msg_hdr.msg_controllen = std::mem::size_of::<cglue::can_stamp_msg>();
 
         info.count =
-            unsafe { cglue::recvmsg(self.sockfd, &msg_hdr as *const _ as *mut cglue::msghdr, 0) };
+            unsafe { cglue::recvmsg(self.sockfd, (&raw const msg_hdr).cast::<cglue::msghdr>().cast_mut(), 0) };
 
         if msg_hdr.msg_namelen >= 8 {
-            let canaddr = unsafe { &*(msg_hdr.msg_name as *const _ as *mut cglue::sockaddr_can) };
-            info.iface = canaddr.can_ifindex
+            let _mutcanaddr = unsafe { &*msg_hdr.msg_name.cast::<cglue::sockaddr_can>() };
+            info.iface = canaddr.can_ifindex;
         }
 
         if info.count < 0 {
@@ -824,92 +850,99 @@ impl SockCanHandle {
         }
 
         // ref: https://github.com/torvalds/linux/blob/master/tools/testing/selftests/net/timestamping.c
-        let mut cmsg = unsafe { &*cglue::CMSG_FIRSTHDR(&msg_hdr) };
+        //let mut cmsg = unsafe { cglue::CMSG_FIRSTHDR(&raw const msg_hdr) };
+        let mut safe_msg =cglue::CMSG_FIRSTHDR(&raw const msg_hdr);
+        
+        while !safe_msg.is_null() {
+            let c_msg = unsafe { &*safe_msg };
 
-        while cmsg as *const _ != 0 as *const _ {
-            match cmsg.cmsg_level as u32 {
-                cglue::can_SOCK_x_SOL_SOCKET => match cmsg.cmsg_type as u32 {
-                    cglue::can_RAW_x_SO_TIMESTAMPING => {
-                        let time = unsafe {
-                            &*(cglue::CMSG_DATA(cmsg) as *const _ as *mut cglue::timespec)
-                        };
-                        info.stamp = (time.tv_sec * 1_000_000 + time.tv_nsec) as u64;
-                        break;
-                    }
-                    cglue::can_RAW_x_SO_TIMESTAMP_NEW => {
-                        let time = unsafe {
-                            &*(cglue::CMSG_DATA(cmsg) as *const _ as *mut cglue::timespec)
-                        };
-                        info.stamp = (time.tv_sec * 1_000_000 + time.tv_nsec) as u64;
-                        break;
-                    }
-                    cglue::can_RAW_x_SO_TIMESTAMPNS => {
-                        let time = unsafe {
-                            &*(cglue::CMSG_DATA(cmsg) as *const _ as *mut cglue::timespec)
-                        };
-                        info.stamp = (time.tv_sec * 1_000_000 + time.tv_nsec) as u64;
-                        break;
-                    }
-                    cglue::can_RAW_x_SO_TIMESTAMP => {
-                        let time = unsafe {
-                            &*(cglue::CMSG_DATA(cmsg) as *const _ as *mut cglue::timeval)
-                        };
-                        info.stamp = (time.tv_sec * 1_000_000 + time.tv_usec) as u64;
-                        break;
-                    }
-                    _ => {}
-                },
+            // Constants converties en i32 une fois pour toutes (évite cast-sign-loss dans les comparaisons)
+            let sol_socket: i32         = i32::try_from(cglue::can_SOCK_x_SOL_SOCKET).unwrap_or(i32::MAX);
+            let so_timestamping: i32    = i32::try_from(cglue::can_RAW_x_SO_TIMESTAMPING).unwrap_or(i32::MAX);
+            let so_timestamp_new: i32   = i32::try_from(cglue::can_RAW_x_SO_TIMESTAMP_NEW).unwrap_or(i32::MAX);
+            let so_timestampns: i32     = i32::try_from(cglue::can_RAW_x_SO_TIMESTAMPNS).unwrap_or(i32::MAX);
+            let so_timestamp: i32       = i32::try_from(cglue::can_RAW_x_SO_TIMESTAMP).unwrap_or(i32::MAX);
 
-                cglue::can_J1939_x_SOL_CAN_J1939 => {
-                    info.iface = canaddr.can_ifindex;
-                    let j1939_src = unsafe {
-                        CanJ1939Header {
-                            name: canaddr.can_addr.j1939.name,
-                            addr: canaddr.can_addr.j1939.addr,
-                        }
-                    };
+            let sol_can_j1939: i32      = i32::try_from(cglue::can_J1939_x_SOL_CAN_J1939).unwrap_or(i32::MAX);
+            let scm_dest_addr: i32      = i32::try_from(cglue::can_J1939_x_SCM_DEST_ADDR).unwrap_or(i32::MAX);
+            let scm_dest_name: i32      = i32::try_from(cglue::can_J1939_x_SCM_DEST_NAME).unwrap_or(i32::MAX);
 
-                    let mut j1939_dst = CanJ1939Header { name: 0, addr: 0 };
+            if c_msg.cmsg_level == sol_socket {
+                let ctype = c_msg.cmsg_type;
 
-                    match cmsg.cmsg_type as u32 {
-                        cglue::can_J1939_x_SCM_DEST_ADDR => {
-                            let addr = unsafe { &*(cglue::CMSG_DATA(cmsg) as *const _ as *mut u8) };
-                            j1939_dst.addr = *addr;
-                        }
-                        cglue::can_J1939_x_SCM_DEST_NAME => {
-                            let name =
-                                unsafe { &*(cglue::CMSG_DATA(cmsg) as *const _ as *mut u64) };
-                            j1939_dst.name = *name;
-                        }
-                        // cglue::can_J1939_x_SCM_PRIO => {
-                        //     let prio = unsafe { &*(cglue::CMSG_DATA(cmsg) as *const _ as *mut u8) };
-                        //     info.j1939.prio= *prio;
-                        // }
-                        _ => {}
-                    }
-                    info.proto = CanProtoInfo::J1939(CanJ1939Info {
-                        src: j1939_src,
-                        dst: j1939_dst,
-                        pgn: unsafe { canaddr.can_addr.j1939.pgn },
-                    });
+                // Trois bras identiques fusionnés avec ||
+                if ctype == so_timestamping || ctype == so_timestamp_new || ctype == so_timestampns {
+                    // lire timespec sans exigence d’alignement strict
+                    let ts = unsafe { core::ptr::read_unaligned(cglue::CMSG_DATA(c_msg).cast::<cglue::timespec>()) };
+                    let sec  = u64::try_from(ts.tv_sec).unwrap_or(0);
+                    let nsec = u64::try_from(ts.tv_nsec).unwrap_or(0);
+                    info.stamp = sec.saturating_mul(1_000_000).saturating_add(nsec);
+                    break;
+                } else if ctype == so_timestamp {
+                    // lire timeval sans exigence d’alignement strict
+                    let tv = unsafe { core::ptr::read_unaligned(cglue::CMSG_DATA(c_msg).cast::<cglue::timeval>()) };
+                    let sec  = u64::try_from(tv.tv_sec).unwrap_or(0);
+                    let usec = u64::try_from(tv.tv_usec).unwrap_or(0);
+                    info.stamp = sec.saturating_mul(1_000_000).saturating_add(usec);
+                    break;
                 }
-                _ => {}
+            } else if c_msg.cmsg_level == sol_can_j1939 {
+                info.iface = canaddr.can_ifindex;
+
+                let j1939_src = unsafe {
+                    CanJ1939Header {
+                        name: canaddr.can_addr.j1939.name,
+                        addr: canaddr.can_addr.j1939.addr,
+                    }
+                };
+                let mut j1939_dst = CanJ1939Header { name: 0, addr: 0 };
+
+                if c_msg.cmsg_type == scm_dest_addr {
+                    let addr = unsafe { core::ptr::read_unaligned(cglue::CMSG_DATA(c_msg).cast::<u8>()) };
+                    j1939_dst.addr = addr;
+                } else if c_msg.cmsg_type == scm_dest_name {
+                    let name = unsafe { core::ptr::read_unaligned(cglue::CMSG_DATA(c_msg).cast::<u64>()) };
+                    j1939_dst.name = name;
+                }
+
+                info.proto = CanProtoInfo::J1939(CanJ1939Info {
+                    src: j1939_src,
+                    dst: j1939_dst,
+                    pgn: unsafe { canaddr.can_addr.j1939.pgn },
+                });
             }
-            cmsg = unsafe { &*cglue::CMSG_NXTHDR(&msg_hdr, cmsg) };
+
+            safe_msg = cglue::CMSG_NXTHDR(&raw const msg_hdr, core::ptr::from_ref(c_msg));
         }
         info
     }
 
     pub fn get_can_frame(&self) -> SockCanMsg {
-        #[allow(invalid_value)]
-        let mut buffer: [u8; cglue::can_MTU_x_FD_MTU as usize] =
-            unsafe { MaybeUninit::uninit().assume_init() };
+        let mut buffer: [u8; cglue::can_MTU_x_FD_MTU as usize] = [0u8; cglue::can_MTU_x_FD_MTU as usize];
         let info = self.get_raw_frame(&mut buffer);
 
-        let can_any_frame = if info.count == mem::size_of::<CanFrameRaw>() as isize {
-            CanAnyFrame::from(&buffer as *const _ as *const CanFrameRaw)
-        } else if info.count == mem::size_of::<CanFdFrameRaw>() as isize {
-            CanAnyFrame::from(&buffer as *const _ as *const CanFdFrameRaw)
+        let std_sz = isize::try_from(core::mem::size_of::<CanFrameRaw>()).unwrap_or(isize::MAX);
+        let fd_sz  = isize::try_from(core::mem::size_of::<CanFdFrameRaw>()).unwrap_or(isize::MAX);
+        let can_any_frame = if info.count == std_sz {
+            let mut tmp = core::mem::MaybeUninit::<CanFrameRaw>::uninit();
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    buffer.as_ptr(),
+                    tmp.as_mut_ptr().cast::<u8>(),
+                    core::mem::size_of::<CanFrameRaw>(),
+                );
+                CanAnyFrame::RawStd(tmp.assume_init())
+            }
+        } else if info.count == fd_sz {
+            let mut tmp = core::mem::MaybeUninit::<CanFdFrameRaw>::uninit();
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    buffer.as_ptr(),
+                    tmp.as_mut_ptr().cast::<u8>(),
+                    core::mem::size_of::<CanFdFrameRaw>(),
+                );
+                CanAnyFrame::RawFd(tmp.assume_init())
+            }
         } else {
             CanAnyFrame::Err(CanError::new("can-invalid-frame", cglue::get_perror()))
         };
@@ -930,13 +963,13 @@ impl SockCanFilter {
 
     /// Each filter contains an internal id and mask. Packets are considered to be matched
     /// by a filter if `received_id & mask == filter_id & mask` holds true.
-    pub fn add_whitelist(&mut self, can_id: u32, can_mask: FilterMask) -> &mut Self {
+    pub fn add_whitelist(&mut self, can_id: u32, can_mask: &FilterMask) -> &mut Self {
         self.count += 1;
         self.masks.push(cglue::can_filter { can_id, can_mask: can_mask.bits() });
         self
     }
 
-    pub fn add_blacklist(&mut self, can_id: u32, can_mask: FilterMask) -> &mut Self {
+    pub fn add_blacklist(&mut self, can_id: u32, can_mask: &FilterMask) -> &mut Self {
         self.count += 1;
         self.masks.push(cglue::can_filter {
             can_id: can_id | cglue::can_FILTER_x_INV_FILTER,
@@ -974,10 +1007,11 @@ impl SockCanFilter {
         let status = unsafe {
             cglue::setsockopt(
                 sock.sockfd,
-                cglue::can_RAW_x_SOL_CAN_RAW as ::std::os::raw::c_int,
-                cglue::can_RAW_x_FILTER as ::std::os::raw::c_int,
-                filter_ptr as *const ::std::os::raw::c_void,
-                (mem::size_of::<CanFrameRaw>() * self.count) as cglue::socklen_t,
+                i32::try_from(cglue::can_RAW_x_SOL_CAN_RAW).unwrap_or(i32::MAX),
+                i32::try_from(cglue::can_RAW_x_FILTER).unwrap_or(i32::MAX),
+                filter_ptr.cast::<::std::os::raw::c_void>(),
+                cglue::socklen_t::try_from(core::mem::size_of::<cglue::can_filter>() * self.count)
+                    .unwrap_or(u32::MAX),
             )
         };
         if status < 0 {

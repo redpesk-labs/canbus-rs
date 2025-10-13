@@ -12,7 +12,7 @@ extern crate sockcan;
 
 // include generated code and Rust module as declare in build.rs->DbcParser::new("DbcSimple")
 include!("./__model3-dbcgen.rs");
-use crate::DbcSimple::*;
+use crate::DbcSimple::CanMsgPool;
 
 use sockcan::prelude::*;
 use std::env;
@@ -21,16 +21,16 @@ use std::str::FromStr;
 /// read can messages and decode them with previously generated dbc parser
 /// This example run in two steps
 /// * At compilation time
-///     * generates Rust DBC parser with build.rs/DbcParser::::fromdbc()
+///     * generates Rust DBC parser with build.`rs/DbcParser::::fromdbc()`
 ///     * include generated RUST dbc parser with socketcan api
-///     * generate can_display binary
+///     * generate `can_display` binary
 /// * At run time
 ///     * query dbc parser to get the list of supported canid
 ///     * subscribe to corresponding message with provided timers
 ///     * on message reception display decoded values
 /// * usage:
 ///     * cargo build
-///     * can_display vcan0 500 1000
+///     * `can_display` vcan0 500 1000
 fn main() -> Result<(), CanError> {
     let args: Vec<String> = env::args().collect();
     println!("syntax: {} [vcan0] [rate-ms] [watchdog-ms]", args[0]);

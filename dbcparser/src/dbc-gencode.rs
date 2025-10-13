@@ -11,11 +11,15 @@
  *
  * Reference: http://mcu.so/Microcontroller/Automotive/dbc-file-format-documentation_compress.pdf
  */
-use crate::data::*;
-use heck::*;
+use crate::data::{
+    ByteOrder, DbcObject, Message, MessageId, MultiplexIndicator, SigCodeGen, Signal, Transmitter,
+    ValDescription, ValueType, MsgCodeGen,
+};
+use heck::{ToSnakeCase, ToUpperCamelCase};
+
 use sockcan::prelude::get_time;
 use std::fs::File;
-use std::io::{self, Error, ErrorKind, Write};
+use std::io::{self, Error, Write};
 
 const IDT0: &str = "";
 const IDT1: &str = "    ";
@@ -71,15 +75,17 @@ impl ValDescription {
         {
             format!("X{}", self.b).to_upper_camel_case()
         } else {
-            self.b.to_owned().to_upper_camel_case()
+            // to_upper_camel_case() takes &self; no clone/owned needed
+            self.b.to_upper_camel_case()
         }
     }
 
-    fn get_data_value(&self, data: String) -> String {
-        match data.as_str() {
+    #[allow(clippy::cast_possible_truncation)]
+    fn get_data_value(&self, data: &str) -> String {
+        match data {
             "bool" => format!("{}", (self.a as i64) == 1),
-            "f64" => format!("{}_f64", self.a),
-            _ => format!("{}_{}", self.a as i64, data.as_str()),
+            "f64"  => format!("{}_f64", self.a),
+            _      => format!("{}_{}", self.a as i64, data),
         }
     }
 }
@@ -91,7 +97,7 @@ impl Message {
         {
             format!("X{}", self.name).to_upper_camel_case()
         } else {
-            self.name.to_owned().to_upper_camel_case()
+            self.name.to_upper_camel_case()
         }
     }
 }
@@ -103,8 +109,7 @@ impl Signal {
         let end_bit = self.start_bit + self.size;
 
         if start_bit > msg_bits {
-            return Err(Error::new(
-                ErrorKind::Other,
+            return Err(Error::other(
                 format!(
                     "signal:{} starts at {}, but message is only {} bits",
                     self.name, start_bit, msg_bits
@@ -113,12 +118,8 @@ impl Signal {
         }
 
         if end_bit > msg_bits {
-            return Err(Error::new(
-                ErrorKind::Other,
-                format!(
-                    "signal:{} ends at {}, but message is only {} bits",
-                    self.name, end_bit, msg_bits
-                ),
+            return Err(Error::other(
+                format!("signal:{} ends at {}, but message is only {} bits", self.name, end_bit, msg_bits),
             ));
         }
 
@@ -138,32 +139,21 @@ impl Signal {
             Some((start_bit, end_bit, msg_bits))
         };
 
-        let (start_bit, end_bit, msg_bits) = match result() {
-            None => {
-                return Err(Error::new(
-                    ErrorKind::Other,
-                    format!(
-                        "signal:{} starts at {}, but message is only {} bits",
-                        self.name, self.start_bit, msg.size
-                    ),
-                ));
-            }
-            Some(value) => value,
+        let Some((start_bit, end_bit, msg_bits)) = result() else {
+            return Err(Error::other(format!(
+                "signal:{} starts at {}, but message is only {} bits",
+                self.name, self.start_bit, msg.size
+            )));
         };
 
         if start_bit > msg_bits {
-            return Err(Error::new(
-                ErrorKind::Other,
-                format!(
-                    "signal:{} starts at {}, but message is only {} bits",
-                    self.name, start_bit, msg_bits
-                ),
+            return Err(Error::other(
+                format!("signal:{} starts at {}, but message is only {} bits", self.name, start_bit, msg_bits),
             ));
         }
 
         if end_bit > msg_bits {
-            return Err(Error::new(
-                ErrorKind::Other,
+            return Err(Error::other(
                 format!(
                     "signal:{} ends at {}, but message is only {} bits",
                     self.name, end_bit, msg_bits
@@ -194,21 +184,27 @@ impl Signal {
         size.to_string()
     }
 
+    #[inline]
+    fn has_scaling(&self) -> bool {
+        const EPS: f64 = 1e-12;
+        self.offset.abs() > EPS || (self.factor - 1.0).abs() > EPS
+    }
+
     fn get_data_type(&self) -> String {
         if self.size == 1 {
-            "bool".to_string()
-        } else if self.offset != 0.0 || self.factor != 1.0 {
-            "f64".to_string()
+            "bool".into()
+        } else if self.has_scaling() {
+            "f64".into()
         } else {
             let size = match self.size {
-                n if n <= 8 => "8",
+                n if n <= 8  => "8",
                 n if n <= 16 => "16",
                 n if n <= 32 => "32",
-                _ => "64",
+                _            => "64",
             };
             match self.value_type {
-                ValueType::Signed => format!("i{}", size),
-                ValueType::Unsigned => format!("u{}", size),
+                ValueType::Signed   => format!("i{size}"),
+                ValueType::Unsigned => format!("u{size}"),
             }
         }
     }
@@ -219,7 +215,7 @@ impl Signal {
         {
             format!("X{}", self.name).to_upper_camel_case()
         } else {
-            self.name.to_upper_camel_case().to_owned()
+            self.name.to_upper_camel_case()
         }
     }
 
@@ -229,12 +225,14 @@ impl Signal {
         {
             format!("X{}", self.name).to_snake_case()
         } else {
-            self.name.to_snake_case().to_owned()
+            self.name.to_snake_case()
         }
     }
 }
 
+
 impl SigCodeGen<&DbcCodeGen> for Signal {
+    #[allow(clippy::too_many_lines)]
     fn gen_signal_trait(&self, code: &DbcCodeGen, msg: &Message) -> io::Result<()> {
         code_output!(
             code,
@@ -297,11 +295,11 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
                 "let value = {}::from_ne_bytes(value.to_ne_bytes());",
                 self.get_data_isize()
             )?;
-        };
+        }
 
         if self.size == 1 {
             code_output!(code, IDT5, "self.value= value == 1;")?;
-        } else if self.offset != 0.0 || self.factor != 1.0 {
+        } else if self.has_scaling() {
             // Scaling is always done on floats
             code_output!(code, IDT5, "let factor = {}_f64;", self.factor)?;
             code_output!(code, IDT5, "let offset = {}_f64;", self.offset)?;
@@ -405,7 +403,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
     fn gen_dbc_min_max(&self, code: &DbcCodeGen, _msg: &Message) -> io::Result<()> {
         if self.size == 1 {
             return Ok(());
-        };
+        }
 
         let typ = self.get_data_type();
         code_output!(
@@ -473,7 +471,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
                         "Dbc{}::{} => panic! (\"(Hoops) impossible conversion {} -> {}\"),",
                         self.get_type_kamel(),
                         variant.get_type_kamel(),
-                        variant.get_data_value(self.get_data_type()),
+                        variant.get_data_value(&self.get_data_type()),
                         self.get_data_type()
                     )?;
                 } else {
@@ -483,7 +481,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
                         "Dbc{}::{} => {},",
                         self.get_type_kamel(),
                         variant.get_type_kamel(),
-                        variant.get_data_value(self.get_data_type())
+                        variant.get_data_value(&self.get_data_type())
                     )?;
                 }
             }
@@ -495,6 +493,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
         Ok(())
     }
 
+    #[allow(clippy::too_many_lines)]
     fn gen_signal_impl(&self, code: &DbcCodeGen, msg: &Message) -> io::Result<()> {
         // signal comments and metadata
         code_output!(code, IDT1, "/// {}::{}", msg.get_type_kamel(), self.get_type_kamel())?;
@@ -537,22 +536,24 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
         code_output!(code, IDT4, "status: CanDataStatus::Unset,")?;
         //code_output!(code, IDT4, "uid: DbcSignal::{},",)?;
         code_output!(code, IDT4, "name:\"{}\",", self.get_type_kamel())?;
-        if self.size != 1 {
-            code_output!(code, IDT4, "value: 0_{},", self.get_data_type())?;
-        } else {
+        if self.size == 1 {
             code_output!(code, IDT4, "value: false,")?;
+        } else {
+            code_output!(code, IDT4, "value: 0_{},", self.get_data_type())?;
         }
+
         code_output!(code, IDT4, "stamp: 0,")?;
         code_output!(code, IDT4, "callback: None,")?;
         code_output!(code, IDT3, "})))")?;
         code_output!(code, IDT2, "}\n")?;
 
         code_output!(code, IDT2, "fn reset_value(&mut self) {")?;
-        if self.size != 1 {
-            code_output!(code, IDT3, "self.value= 0_{};", self.get_data_type())?;
-        } else {
+        if self.size == 1 {
             code_output!(code, IDT3, "self.value= false;")?;
+        } else {
+            code_output!(code, IDT3, "self.value= 0_{};", self.get_data_type())?;
         }
+
         code_output!(code, IDT2, "}\n")?;
 
         if let Some(variants) = code.dbcfd.value_descriptions_for_signal(msg.id, self.name.as_str())
@@ -581,7 +582,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
                         code,
                         IDT4,
                         "// WARNING {} => Err(CanError::new(\"not-in-range\",\"({}) !!! {}({}) not in [{}..{}] range\")),",
-                        variant.get_data_value(self.get_data_type()),
+                        variant.get_data_value(&self.get_data_type()),
                         variant.get_type_kamel(),
                         variant.a,
                         self.get_data_type(),
@@ -594,11 +595,11 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
                             code,
                             IDT4,
                             "{} => Dbc{}::{},",
-                            variant.get_data_value(self.get_data_type()),
+                            variant.get_data_value(&self.get_data_type()),
                             self.get_type_kamel(),
                             variant.get_type_kamel()
                         )?;
-                    };
+                    }
                 }
 
                 // Help in buggy DBC file support
@@ -643,7 +644,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
                         "Dbc{}::{} => self.set_typed_value({}, data),",
                         self.get_type_kamel(),
                         variant.get_type_kamel(),
-                        variant.get_data_value(self.get_data_type())
+                        variant.get_data_value(&self.get_data_type())
                     )?;
                 }
             }
@@ -672,7 +673,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
 
         if self.size == 1 {
             code_output!(code, IDT3, "let value = value as u8;")?;
-        } else if code.range_check && (self.offset != 0.0 || self.factor != 1.0) {
+        } else if code.range_check && self.has_scaling() {
             code_output!(
                 code,
                 IDT3,
@@ -702,7 +703,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
                 "let value = {}::from_ne_bytes(value.to_ne_bytes());",
                 self.get_data_usize()
             )?;
-        };
+        }
 
         match self.byte_order {
             ByteOrder::LittleEndian => {
@@ -725,7 +726,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
                     end_bit
                 )?;
             }
-        };
+        }
 
         code_output!(code, IDT3, "Ok(())")?;
         code_output!(code, IDT2, "}\n")?;
@@ -749,27 +750,12 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
     fn gen_can_any_frame(&self, code: &DbcCodeGen, msg: &Message) -> io::Result<()> {
         match self.multiplexer_indicator {
             MultiplexIndicator::Plain => self.gen_can_std_frame(code, msg)?,
-            MultiplexIndicator::Multiplexor => {
-                // code_output!(
-                //     code,
-                //     IDT2,
-                //     "(multiplexor) signal:{} msg:{}",
-                //     self.name,
-                //     msg.name
-                // )?;
-                // // render_multiplexor_signal(format!( signal, msg)?,
+            MultiplexIndicator::Multiplexor
+            | MultiplexIndicator::MultiplexedSignal(_)
+            | MultiplexIndicator::MultiplexorAndMultiplexedSignal(_) => {
+                // (optional) any shared handling for multiplexed cases
             }
-            MultiplexIndicator::MultiplexedSignal(_) => {
-                // code_output!(
-                //     code,
-                //     IDT2,
-                //     "(multiplexed) signal:{} msg:{}",
-                //     self.name,
-                //     msg.name
-                // )?;
-            }
-            MultiplexIndicator::MultiplexorAndMultiplexedSignal(_) => {}
-        }
+}
 
         // fmt display for signal
         code_output!(code, IDT1, "impl fmt::Display for {} {{", self.get_type_kamel())?;
@@ -805,7 +791,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
     fn gen_code_signal(&self, code: &DbcCodeGen, msg: &Message) -> io::Result<()> {
         self.gen_signal_impl(code, msg)?;
         self.gen_can_any_frame(code, msg)?;
-        self.gen_signal_trait(code, &msg)?;
+        self.gen_signal_trait(code, msg)?;
         Ok(())
     }
 }
@@ -847,12 +833,8 @@ impl MsgCodeGen<&DbcCodeGen> for Message {
         code_output!(code, IDT2, "}\n")?;
 
         // set all message signals values
-        let args: Vec<String> = self
-            .signals
-            .iter()
-            .filter_map(|signal| {
-                Some(format!("{}: {}", signal.get_type_snake(), signal.get_data_type()))
-            })
+        let args: Vec<String> = self.signals.iter()
+            .map(|signal| format!("{}: {}", signal.get_type_snake(), signal.get_data_type()))
             .collect();
 
         code_output!(
@@ -1063,26 +1045,28 @@ impl MsgCodeGen<&DbcCodeGen> for Message {
 }
 
 pub trait Text2Str<T> {
+    /// Write a line with indentation.
+    ///
+    /// # Errors
+    /// Propagates any I/O error from the underlying writer.
     fn write(&self, indent: &str, text: T) -> io::Result<()>;
 }
 
 impl Text2Str<&str> for DbcCodeGen {
     fn write(&self, indent: &str, text: &str) -> io::Result<()> {
         let nl = "\n";
-        match &self.outfd {
-            Some(outfd) => {
-                let mut outfd = outfd.try_clone()?;
-                outfd.write(indent.as_bytes())?;
-                outfd.write(text.as_bytes())?;
-                outfd.write(nl.as_bytes())?;
-            }
-            None => {
-                let mut outfd = io::stdout();
-                outfd.write(indent.as_bytes())?;
-                outfd.write(text.as_bytes())?;
-                outfd.write(nl.as_bytes())?;
-            }
+        if let Some(outfd) = &self.outfd {
+            let mut outfd = outfd.try_clone()?;
+            outfd.write_all(indent.as_bytes())?;
+            outfd.write_all(text.as_bytes())?;
+            outfd.write_all(nl.as_bytes())?;
+        } else {
+            let mut outfd = io::stdout();
+            outfd.write_all(indent.as_bytes())?;
+            outfd.write_all(text.as_bytes())?;
+            outfd.write_all(nl.as_bytes())?;
         }
+
         Ok(())
     }
 }
@@ -1103,9 +1087,10 @@ impl DbcCodeGen {
 }
 
 impl DbcParser {
+    #[must_use]
     pub fn new(uid: &'static str) -> Self {
         DbcParser {
-            uid: uid,
+            uid,
             range_check: true,
             serde_json: true,
             infile: None,
@@ -1151,42 +1136,39 @@ impl DbcParser {
         self
     }
 
-    fn check_list(&self, canid: MessageId, list: &Vec<u32>) -> bool {
-        match list.binary_search(&canid.0) {
-            Ok(_idx) => true,
-            Err(_idx) => false,
-        }
+    fn check_list(canid: MessageId, list: &[u32]) -> bool {
+        list.binary_search(&canid.0).is_ok()
     }
-
+    /// Generate Rust code from the configured DBC.
+    ///
+    /// # Errors
+    /// I/O errors reading the DBC or writing output; parsing errors.
+    ///
+    /// # Panics
+    /// Panics if time formatting (`get_time("%c")`) fails.
+    #[allow(clippy::too_many_lines)]
     pub fn generate(&mut self) -> io::Result<()> {
-        let infile = match &self.infile {
-            Some(path) => path,
-            None => return Err(Error::new(ErrorKind::Other, "setting dbcpath is mandatory")),
+        let Some(infile) = &self.infile else {
+            return Err(Error::other("setting dbcpath is mandatory"));
         };
 
         // open and parse dbc input file
         let mut dbcfd = match DbcObject::from_file(infile.as_str()) {
-            Err(error) => return Err(Error::new(ErrorKind::Other, error.to_string())),
+            Err(error) => return Err(Error::other(error.to_string())),
             Ok(dbcfd) => dbcfd,
         };
 
         // sort message by canid
         dbcfd.messages.sort_by(|a, b| a.id.0.cmp(&b.id.0));
 
-        match self.whitelist.clone() {
-            Some(mut list) => {
-                list.sort_by(|a, b| a.cmp(&b));
-                dbcfd.messages.retain(|msg| self.check_list(msg.id, &list));
-            }
-            None => {}
+        if let Some(mut list) = self.whitelist.clone() {
+            list.sort_unstable();
+            dbcfd.messages.retain(|msg| DbcParser::check_list(msg.id, &list));
         }
 
-        match self.blacklist.clone() {
-            Some(mut list) => {
-                list.sort_by(|a, b| a.cmp(&b));
-                dbcfd.messages.retain(|msg| !self.check_list(msg.id, &list));
-            }
-            None => {}
+        if let Some(mut list) = self.blacklist.clone() {
+            list.sort_unstable();
+            dbcfd.messages.retain(|msg| !DbcParser::check_list(msg.id, &list));
         }
 
         // sort message by canid
@@ -1202,8 +1184,8 @@ impl DbcParser {
 
         // open/create output file
         let code = DbcCodeGen {
-            dbcfd: dbcfd,
-            outfd: outfd,
+            dbcfd,
+            outfd,
             range_check: self.range_check,
             serde_json: self.serde_json,
         };
@@ -1288,7 +1270,7 @@ impl DbcParser {
 
         // extract canid from messages vector
         let canids: Vec<u32> =
-            code.dbcfd.messages.iter().filter_map(|msg| Some(msg.id.to_u32())).collect();
+            code.dbcfd.messages.iter().map(|msg| msg.id.to_u32()).collect();
 
         code_output!(code, IDT1, "pub fn new(uid: &'static str) -> Self {")?;
         code_output!(code, IDT2, "CanMsgPool {")?;

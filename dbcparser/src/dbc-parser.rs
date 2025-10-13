@@ -8,8 +8,18 @@
  * License: $RP_BEGIN_LICENSE$ SPDX:MIT https://opensource.org/licenses/MIT $RP_END_LICENSE$
  */
 
-use crate::data::*;
+use crate::data::{
+     AccessNode, AccessType, AttributeDefault, AttributeDefinition, AttributeValue,
+     AttributeValuedForObjectType, AttributeValueForObject, Baudrate, ByteOrder, Comment,
+     DbcError, DbcObject, EnvType, EnvironmentVariable, EnvironmentVariableData,
+     ExtendedMultiplex, ExtendedMultiplexMapping, Message, MessageId, MessageTransmitter, Node,
+     Signal, SignalExtendedValueType, SignalExtendedValueTypeList, SignalGroups, SignalType,
+     SignalTypeRef, Symbol, Transmitter, ValDescription, ValueDescription, ValueTable,
+     MultiplexIndicator, ValueType, Version,
+};
 use std::str;
+
+use crate::Error;
 
 use nom::{
     branch::{alt, permutation},
@@ -28,7 +38,7 @@ fn is_semi_colon(chr: char) -> bool {
 }
 
 fn is_c_string_char(chr: char) -> bool {
-    chr.is_digit(10) || chr.is_alphabetic() || chr == '_'
+    chr.is_ascii_digit() || chr.is_alphabetic() || chr == '_'
 }
 
 fn is_c_ident_head(chr: char) -> bool {
@@ -40,6 +50,7 @@ fn is_quote(chr: char) -> bool {
 }
 
 /// Multispace zero or more
+#[allow(clippy::needless_pass_by_value)]
 fn ms0<T, E: ParseError<T>>(input: T) -> IResult<T, T, E>
 where
     T: InputTakeAtPosition,
@@ -52,6 +63,7 @@ where
 }
 
 /// Multi space one or more
+#[allow(clippy::needless_pass_by_value)]
 fn ms1<T, E: ParseError<T>>(input: T) -> IResult<T, T, E>
 where
     T: InputTakeAtPosition,
@@ -116,7 +128,7 @@ fn brk_close(s: &str) -> IResult<&str, char> {
     char(']')(s)
 }
 
-/// A valid C_identifier. C_identifiers start with a  alphacharacter or an underscore
+/// A valid `C_identifier`. `C_identifier` start with a  alphacharacter or an underscore
 /// and may further consist of alpha­numeric, characters and underscore
 fn c_ident(s: &str) -> IResult<&str, String> {
     let (s, head) = take_while1(is_c_ident_head)(s)?;
@@ -130,7 +142,7 @@ fn c_ident_vec(s: &str) -> IResult<&str, Vec<String>> {
 
 fn char_string(s: &str) -> IResult<&str, &str> {
     let (s, _) = quote(s)?;
-    let (s, char_string_value) = take_till(|c| is_quote(c as char))(s)?;
+    let (s, char_string_value) = take_till(is_quote)(s)?;
     let (s, _) = quote(s)?;
     Ok((s, char_string_value))
 }
@@ -282,8 +294,8 @@ fn message(s: &str) -> IResult<&str, Message> {
             id: message_id,
             name: message_name,
             size: message_size,
-            transmitter: transmitter,
-            signals: signals,
+            transmitter,
+            signals,
         }),
     ))
 }
@@ -655,7 +667,7 @@ fn attribute_value_for_object(s: &str) -> IResult<&str, AttributeValueForObject>
 fn attribute_definition_node(s: &str) -> IResult<&str, AttributeDefinition> {
     let (s, _) = tag("BU_")(s)?;
     let (s, _) = ms1(s)?;
-    let (s, node) = take_till(|c| is_semi_colon(c as char))(s)?;
+    let (s, node)    = take_till(is_semi_colon)(s)?;
     Ok((s, AttributeDefinition::Node(node.to_string())))
 }
 
@@ -663,7 +675,7 @@ fn attribute_definition_node(s: &str) -> IResult<&str, AttributeDefinition> {
 fn attribute_definition_signal(s: &str) -> IResult<&str, AttributeDefinition> {
     let (s, _) = tag("SG_")(s)?;
     let (s, _) = ms1(s)?;
-    let (s, signal) = take_till(|c| is_semi_colon(c as char))(s)?;
+    let (s, signal)  = take_till(is_semi_colon)(s)?;
     Ok((s, AttributeDefinition::Signal(signal.to_string())))
 }
 
@@ -671,7 +683,7 @@ fn attribute_definition_signal(s: &str) -> IResult<&str, AttributeDefinition> {
 fn attribute_definition_environment_variable(s: &str) -> IResult<&str, AttributeDefinition> {
     let (s, _) = tag("EV_")(s)?;
     let (s, _) = ms1(s)?;
-    let (s, env_var) = take_till(|c| is_semi_colon(c as char))(s)?;
+    let (s, env_var) = take_till(is_semi_colon)(s)?;
     Ok((s, AttributeDefinition::EnvironmentVariable(env_var.to_string())))
 }
 
@@ -679,13 +691,13 @@ fn attribute_definition_environment_variable(s: &str) -> IResult<&str, Attribute
 fn attribute_definition_message(s: &str) -> IResult<&str, AttributeDefinition> {
     let (s, _) = tag("BO_")(s)?;
     let (s, _) = ms1(s)?;
-    let (s, message) = take_till(|c| is_semi_colon(c as char))(s)?;
+    let (s, message) = take_till(is_semi_colon)(s)?;
     Ok((s, AttributeDefinition::Message(message.to_string())))
 }
 
 // TODO add properties
 fn attribute_definition_plain(s: &str) -> IResult<&str, AttributeDefinition> {
-    let (s, plain) = take_till(|c| is_semi_colon(c as char))(s)?;
+    let (s, plain)   = take_till(is_semi_colon)(s)?;
     Ok((s, AttributeDefinition::Plain(plain.to_string())))
 }
 
@@ -861,36 +873,41 @@ fn signal_groups(s: &str) -> IResult<&str, SignalGroups> {
     Ok((s, SignalGroups { message_id, signal_group_name, repetitions, signal_names }))
 }
 
+/// Parse a DBC buffer into a `DbcObject`.
+///
+/// # Errors
+/// Returns a `DbcError` if parsing fails or if trailing, non-whitespace
+/// input remains after parsing.
 pub fn dbc_from_str(dbc_str: &str) -> Result<DbcObject, DbcError<'_>> {
     match dbc_parse_str(dbc_str) {
         Ok((remaining, object)) => {
             match multispace0::<&str, ()>(remaining) {
                 Ok((ascii, _)) => {
                     if !ascii.is_empty() {
-                        println!("Unprocessed DBC: {}", ascii);
+                        println!("Unprocessed DBC: {ascii}");
                         return Err(DbcError {
                             uid: "parsing-not-completed",
                             error: Error::Incomplete(remaining),
                             info: "fail to parse dbc input".to_owned(),
                         });
                     }
-                    return Ok(object);
+                    Ok(object)
                 }
                 Err(_error) => {
-                    return Err(DbcError {
+                    Err(DbcError {
                         uid: "parsing-not-clean",
                         error: Error::Misc,
                         info: "fail to parse dbc input".to_owned(),
-                    });
+                    })
                 }
-            };
+            }
         }
         Err(error) => {
-            return Err(DbcError {
+            Err(DbcError {
                 uid: "parsing-fail",
                 error: Error::Parsing(error.to_string()),
                 info: "fail to parse full dbc input".to_owned(),
-            });
+            })
         }
     }
 }

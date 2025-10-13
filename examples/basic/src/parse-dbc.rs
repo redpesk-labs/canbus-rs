@@ -11,7 +11,7 @@ extern crate dbcparser;
 use dbcparser::prelude::*;
 
 use std::env;
-use std::io::{self, Error, ErrorKind};
+use std::io::{self, Error};
 
 const HEADER: &str = "
 // -----------------------------------------------------------------------
@@ -23,6 +23,14 @@ const HEADER: &str = "
 //   - example/demo/dbc-log/??? for static values
 //  Reference: iot.bzh/Redpesk canbus-rs code generator
 // -----------------------------------------------------------------------
+#![allow(
+warnings,
+clippy::all,
+clippy::pedantic,
+clippy::nursery,
+clippy::redundant_field_names,
+clippy::similar_names
+)]
 ";
 
 fn main() -> io::Result<()> {
@@ -34,7 +42,7 @@ fn main() -> io::Result<()> {
             "example: {} 'examples/dbc-log/model3can.dbc' 'examples/dbc-log/candump.log'",
             args[0]
         );
-        return Err(Error::new(ErrorKind::Other, "invalid input arguments"));
+        return Err(Error::other("invalid input arguments"));
     }
 
     let dbcfile = args[1].as_str();

@@ -93,9 +93,11 @@ pub fn CMSG_DATA(cmsg: *const cmsghdr) -> *mut std::ffi::c_uchar {
 // }
 
 pub fn CMSG_LEN(length: std::ffi::c_uint) -> std::ffi::c_uint {
+    let len_u32: u32 = length;
+
     u32::try_from(CMSG_ALIGN(std::mem::size_of::<cmsghdr>()))
-    .map(|base| base.saturating_add(length))
-    .unwrap_or(u32::MAX)
+        .map(|base| base.saturating_add(len_u32))
+        .unwrap_or(u32::MAX)
 }
 
 // return Linux current date/time as a string

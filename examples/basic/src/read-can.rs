@@ -13,17 +13,16 @@ fn main() -> Result<(), String> {
     const VCAN: &str = "vcan0";
 
     let sockfd = match SockCanHandle::open_raw(VCAN, CanTimeStamp::CLASSIC) {
-        Err(error) => return Err(format!("fail opening candev {}", error.to_string())),
+        Err(error) => return Err(format!("fail opening candev {error}")),
         Ok(value) => value,
     };
 
-    match SockCanFilter::new(0)
-        .add_whitelist(0x257, FilterMask::SFF_MASK)
-        .add_whitelist(0x118, FilterMask::ERR_FLAG | FilterMask::SFF_MASK)
+    if let Err(error) = SockCanFilter::new(0)
+        .add_whitelist(0x257, &FilterMask::SFF_MASK)
+        .add_whitelist(0x118, &(FilterMask::ERR_FLAG | FilterMask::SFF_MASK))
         .apply(&sockfd)
     {
-        Err(error) => return Err(format!("raw-filer fail filter Error:{}", error.to_string())),
-        Ok(()) => {}
+        return Err(format!("raw-filter fail filter Error:{error}"));
     }
 
     // check a full frame
@@ -34,8 +33,8 @@ fn main() -> Result<(), String> {
     let frame_data = frame.get_data();
     let frame_source = sockfd.get_ifname(frame.get_iface()).unwrap();
     println!(
-        "Received FdFrame id:{:#04x} stamp:{} source:{} len:{} data:{:?}",
-        frame_id, frame_stamp, frame_source, frame_len, frame_data
+        "Received FdFrame id:{frame_id:#04x} stamp:{frame_stamp} source:{frame_source} \
+        len:{frame_len} data:{frame_data:?}"
     );
 
     println!("Waiting for Raw CAN package");
@@ -58,8 +57,8 @@ fn main() -> Result<(), String> {
                 frame.get_len(),
                 frame_data
             ),
-            CanAnyFrame::Err(error) => panic!("Fail reading candev Error:{}", error.to_string()),
-            CanAnyFrame::None(canid) => println!("Received Timeout id:{:#04x}", *canid),
+            CanAnyFrame::Err(error) => panic!("Fail reading candev Error:{error}"),
+            CanAnyFrame::None(canid) => println!("Got timeout canid:{canid}"),
         }
     }
 }

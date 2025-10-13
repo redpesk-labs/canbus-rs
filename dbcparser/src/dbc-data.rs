@@ -13,46 +13,111 @@ use std::fs::File;
 use std::io;
 use std::io::prelude::*;
 
+use std::fmt;
+
+#[derive(Debug)]                 // ← add this
 pub struct DbcError<'a> {
     pub uid: &'static str,
     pub info: String,
     pub error: Error<'a>,
 }
 
-impl<'a> DbcError<'a> {
-    pub fn to_string(&self) -> String {
-        format!("uid:{}, info:{}", self.uid, self.info)
+impl fmt::Display for Error<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::Incomplete(s) => write!(f, "incomplete input: {s}"),
+            Error::Parsing(msg) => write!(f, "parse error: {msg}"),
+            Error::MultipleMultiplexors => write!(f, "multiple multiplexors not supported"),
+            Error::System(s) => write!(f, "system error: {s}"),
+            Error::Misc => write!(f, "misc error"),
+        }
     }
 }
 
+impl fmt::Display for DbcError<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "uid:{}, info:{}", self.uid, self.info)
+    }
+}
+
+impl std::error::Error for Error<'_> {}
+
+/// Parser error kinds.
+#[derive(Debug)]                 // ← and this
 pub enum Error<'a> {
-    /// Remaining String, the DbcObject was only read partially.
-    /// Occurs when e.g. an unexpected symbol occurs.
+    /// Remaining string; the `DbcObject` was only read partially.
+    /// Occurs when, e.g., an unexpected symbol appears.
     Incomplete(&'a str),
-    /// Parser failed
+
+    /// Parser failed.
     Parsing(String),
-    /// Can't Lookup multiplexors because the message uses extended multiplexing.
+
+    /// Can't look up multiplexors because the message uses extended multiplexing.
     MultipleMultiplexors,
 
+    /// System-level error.
     System(&'static str),
 
+    /// Miscellaneous error.
     Misc,
 }
 
 pub trait MsgCodeGen<T> {
+    /// Generate the code for one message.
+    ///
+    /// # Errors
+    /// Returns an error if writing to the output fails.
     fn gen_code_message(&self, code: T) -> io::Result<()>;
+    /// Generate the CAN/DBC message definition.
+    ///
+    /// # Errors
+    /// Returns an error if writing to the output fails.
     fn gen_can_dbc_message(&self, code: T) -> io::Result<()>;
+
+    /// Generate the CAN/DBC impl section.
+    ///
+    /// # Errors
+    /// Returns an error if writing to the output fails.
     fn gen_can_dbc_impl(&self, code: T) -> io::Result<()>;
 }
 
 pub trait SigCodeGen<T> {
+    /// Generate code for a signal.
+    ///
+    /// # Errors
+    /// Returns an error if writing to the output fails.
     fn gen_code_signal(&self, code: T, msg: &Message) -> io::Result<()>;
+    /// Generate code to build an "any" CAN frame.
+    ///
+    /// # Errors
+    /// Returns an error if writing to the output fails.
     fn gen_can_any_frame(&self, code: T, msg: &Message) -> io::Result<()>;
+    /// Generate code to build a standard CAN frame.
+    ///
+    /// # Errors
+    /// Returns an error if writing to the output fails.
     fn gen_can_std_frame(&self, code: T, msg: &Message) -> io::Result<()>;
     //fn gen_can_mux_frame(&self, code: T, msg: &Message) -> io::Result<()>;
+    /// Generate the signal trait.
+    ///
+    /// # Errors
+    /// Returns an error if writing to the output fails.
     fn gen_signal_trait(&self, code: T, msg: &Message) -> io::Result<()>;
+    /// Generate min/max helpers from DBC.
+    ///
+    /// # Errors
+    /// Returns an error if writing to the output fails.
     fn gen_dbc_min_max(&self, code: T, msg: &Message) -> io::Result<()>;
+
+    /// Generate signal impl.
+    ///
+    /// # Errors
+    /// Returns an error if writing to the output fails.
     fn gen_signal_impl(&self, code: T, msg: &Message) -> io::Result<()>;
+    /// Generate signal enum.
+    ///
+    /// # Errors
+    /// Returns an error if writing to the output fails.
     fn gen_signal_enum(&self, code: T, msg: &Message) -> io::Result<()>;
 }
 
@@ -80,10 +145,11 @@ pub struct Signal {
 }
 
 /// CAN id in header of CAN frame.
-/// Must be unique in DbcObject file.
+/// Must be unique in `DbcObject` file.
 #[derive(Copy, Clone)]
 pub struct MessageId(pub u32);
 impl MessageId {
+    #[must_use]
     pub fn to_u32(&self) -> u32 {
         self.0
     }
@@ -215,6 +281,7 @@ pub struct ValueTable {
     pub value_descriptions: Vec<ValDescription>,
 }
 
+/// Mapping between multiplexors and multiplexed signals
 #[derive(Clone)]
 pub struct ExtendedMultiplexMapping {
     pub min_value: u64,
@@ -243,7 +310,7 @@ pub enum Comment {
 #[derive(Clone)]
 pub struct Message {
     /// CAN id in header of CAN frame.
-    /// Must be unique in DbcObject file.
+    /// Must be unique in `DbcObject` file.
     pub id: MessageId,
     pub name: String,
     pub size: u64,
@@ -378,12 +445,20 @@ pub struct DbcObject {
 }
 
 impl DbcObject {
+    /// Load a DBC object from a file path.
+    ///
+    /// # Panics
+    /// Panics if file metadata cannot be read (`metadata().unwrap()`).
+    ///
+    /// # Errors
+    /// Returns an error if the file cannot be opened/read or the DBC content is invalid.
     pub fn from_file(dbcpath: &str) -> Result<DbcObject, DbcError<'_>> {
         let filename = Box::leak(dbcpath.to_owned().into_boxed_str()) as &'static str;
         let dbc_buffer = || -> Result<Vec<u8>, io::Error> {
             let mut fd = File::open(filename)?;
+            // was: Vec::with_capacity(size as usize);
             let size = fd.metadata().unwrap().len();
-            let mut buffer = Vec::with_capacity(size as usize);
+            let mut buffer = Vec::with_capacity(usize::try_from(size).unwrap_or(usize::MAX));
             fd.read_to_end(&mut buffer)?;
             Ok(buffer)
         };
@@ -399,11 +474,16 @@ impl DbcObject {
             }
         }
     }
-
+    /// Parse a DBC object from a UTF-8 string.
+    ///
+    /// # Errors
+    /// Returns an error if the DBC content cannot be parsed.
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(dbc_buffer: &str) -> Result<DbcObject, DbcError<'_>> {
         dbc_from_str(dbc_buffer)
     }
 
+    #[must_use]
     pub fn signal_by_name(&self, message_id: MessageId, signal_name: &str) -> Option<&Signal> {
         let message = self.messages.iter().find(|message| message.id.0 == message_id.0);
 
@@ -413,94 +493,79 @@ impl DbcObject {
         None
     }
 
-    /// Lookup a message comment
-    pub fn message_comment(&self, message_id: MessageId) -> Option<&str> {
-        self.comments
-            .iter()
-            .filter_map(|x| match x {
-                Comment::Message { message_id: ref x_message_id, ref comment } => {
-                    if (*x_message_id).0 == message_id.0 {
-                        Some(comment.as_str())
-                    } else {
-                        None
-                    }
-                }
-                _ => None,
-            })
-            .next()
-    }
+#[must_use]
+pub fn message_comment(&self, message_id: MessageId) -> Option<&str> {
+    self.comments.iter().find_map(|x| match x {
+        Comment::Message { message_id: x_message_id, comment } => {
+            if x_message_id.0 == message_id.0 { Some(comment.as_str()) } else { None }
+        }
+        _ => None,
+    })
+}
 
-    /// Lookup a signal comment
-    pub fn signal_comment(&self, message_id: MessageId, signal_name: &str) -> Option<&str> {
-        self.comments
-            .iter()
-            .filter_map(|x| match x {
-                Comment::Signal {
-                    message_id: ref x_message_id,
-                    signal_name: ref x_signal_name,
-                    comment,
-                } => {
-                    if (*x_message_id).0 == message_id.0 && x_signal_name == signal_name {
-                        Some(comment.as_str())
-                    } else {
-                        None
-                    }
-                }
-                _ => None,
-            })
-            .next()
-    }
+#[must_use]
+pub fn signal_comment(&self, message_id: MessageId, signal_name: &str) -> Option<&str> {
+    self.comments.iter().find_map(|x| match x {
+        Comment::Signal { message_id: x_message_id, signal_name: x_signal_name, comment } => {
+            if x_message_id.0 == message_id.0 && x_signal_name == signal_name {
+                Some(comment.as_str())
+            } else {
+                None
+            }
+        }
+        _ => None,
+    })
+}
 
-    /// Lookup value descriptions for signal
-    pub fn value_descriptions_for_signal(
-        &self,
-        message_id: MessageId,
-        signal_name: &str,
-    ) -> Option<&[ValDescription]> {
-        self.value_descriptions
-            .iter()
-            .filter_map(|x| match x {
-                ValueDescription::Signal {
-                    message_id: ref x_message_id,
-                    signal_name: ref x_signal_name,
-                    ref value_descriptions,
-                } => {
-                    if (*x_message_id).0 == message_id.0 && x_signal_name == signal_name {
-                        Some(value_descriptions.as_slice())
-                    } else {
-                        None
-                    }
-                }
-                _ => None,
-            })
-            .next()
-    }
+#[must_use]
+pub fn value_descriptions_for_signal(
+    &self,
+    message_id: MessageId,
+    signal_name: &str,
+) -> Option<&[ValDescription]> {
+    self.value_descriptions.iter().find_map(|x| match x {
+        ValueDescription::Signal {
+            message_id: x_message_id,
+            signal_name: x_signal_name,
+            value_descriptions,
+        } => {
+            if x_message_id.0 == message_id.0 && x_signal_name == signal_name {
+                Some(value_descriptions.as_slice())
+            } else {
+                None
+            }
+        }
+        ValueDescription::EnvironmentVariable { .. } => None,
+    })
+}
 
-    /// Lookup the extended value for a given signal
-    pub fn extended_value_type_for_signal(
-        &self,
-        message_id: MessageId,
-        signal_name: &str,
-    ) -> Option<&SignalExtendedValueType> {
-        self.signal_extended_value_type_list
-            .iter()
-            .filter_map(|x| {
-                let SignalExtendedValueTypeList {
-                    message_id: ref x_message_id,
-                    signal_name: ref x_signal_name,
-                    ref signal_extended_value_type,
-                } = x;
-                if (*x_message_id).0 == message_id.0 && x_signal_name == signal_name {
-                    Some(signal_extended_value_type)
-                } else {
-                    None
-                }
-            })
-            .next()
-    }
+#[must_use]
+pub fn extended_value_type_for_signal(
+    &self,
+    message_id: MessageId,
+    signal_name: &str,
+) -> Option<&SignalExtendedValueType> {
+    self.signal_extended_value_type_list.iter().find_map(|x| {
+        let SignalExtendedValueTypeList {
+            message_id: x_message_id,
+            signal_name: x_signal_name,
+            signal_extended_value_type,
+        } = x;
+        if x_message_id.0 == message_id.0 && x_signal_name == signal_name {
+            Some(signal_extended_value_type)
+        } else {
+            None
+        }
+    })
+}
 
-    /// Lookup the message multiplexor switch signal for a given message
-    /// This does not work for extended multiplexed messages, if multiple multiplexors are defined for a message a Error is returned.
+    /// Lookup the message multiplexor switch signal for a given message.
+    /// This does not work for extended multiplexed messages; if multiple multiplexors
+    /// are defined for a message an `Error` is returned.
+    ///
+    /// # Errors
+    /// Returns `Err(Error::MultipleMultiplexors)` when the message uses extended
+    /// multiplexing (i.e., multiple multiplexors are defined).
     pub fn message_multiplexor_switch(
         &self,
         message_id: MessageId,

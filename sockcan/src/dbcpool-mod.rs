@@ -14,6 +14,8 @@ use std::rc::Rc;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+use crate::utils::CanError; // bring error type into scope for Result<T, CanError>
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CanDataStatus {
@@ -90,11 +92,11 @@ pub trait FromCanDbcType<T> {
     /// Attempts to convert a `CanDbcType` into `T`.
     ///
     /// # Errors
-    /// Returns a `CanError` when the value cannot be converted to `T`, e.g.:
+    /// Returns a [`CanError`] when the value cannot be converted to `T`, e.g.:
     /// - the underlying variant does not match the expected type;
     /// - the payload size/endianness is incompatible;
     /// - numeric conversion would overflow/underflow.
-    fn convert(value: &CanDbcType) -> Result<T, ()>;
+    fn convert(value: &CanDbcType) -> Result<T, CanError>;
 }
 
 impl CanDbcType {
@@ -109,24 +111,24 @@ impl CanDbcType {
     {
         match Self::convert(self) {
             Ok(val) => Ok(val),
-            Err(()) => Err(CanError::new("invalid-type-cast", "requested type is invalid")),
+            Err(e)  => Err(e), // propagate the CanError from convert(...)
         }
     }
 }
 
 #[macro_export]
 macro_rules! to_can_type {
-    ($src:ty, $dst:tt) => {
-        impl From<$src> for CanDbcType {
-            fn from(value: $src) -> Self {
-                CanDbcType::$dst(value)
-            }
-        }
+    ($src:ty, $variant:ident) => {
         impl FromCanDbcType<$src> for CanDbcType {
-            fn convert(value: &CanDbcType) -> Result<$src, ()> {
+            #[inline]
+            fn convert(value: &CanDbcType) -> Result<$src, CanError> {
                 match value {
-                    CanDbcType::$dst(data) => return Ok(*data),
-                    _ => Err(()),
+                    CanDbcType::$variant(v) => Ok(*v),
+                    // Fallback error when the underlying variant doesn't match
+                    _ => Err(CanError::new(
+                        "dbc-convert",
+                        concat!("expected variant ", stringify!($variant)),
+                    )),
                 }
             }
         }
