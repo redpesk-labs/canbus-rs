@@ -3,6 +3,7 @@ name = "lib_dbcparser"
 authors = ["fulup@iot.bzh"]
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 
 [dependencies]
 nom = { version = "7", features = ["alloc"] }

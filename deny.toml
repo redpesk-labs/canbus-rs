@@ -1,0 +1,23 @@
+# deny.toml
+
+# (optional) keep the graph small by ignoring dev-dependencies
+[graph]
+exclude-dev = true
+
+# if example crates still show up as "synthesized", exclude them explicitly:
+exclude = [
+  "can-basic",
+  "can-bms",
+  "can-model3",
+]
+
+[licenses]
+# Everything is denied by default—list what your org allows here.
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "BSD-3-Clause",
+  "ISC",
+  "Unicode-3.0",   # required by unicode-ident
+  "BSL-1.0",       # Boost
+]

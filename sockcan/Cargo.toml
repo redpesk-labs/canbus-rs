@@ -11,6 +11,7 @@ name = "lib_sockcan"
 version = "0.1.0"
 authors = ["fulup@iot.bzh"]
 edition = "2021"
+license = "MIT"
 
 [build-dependencies]
 bindgen    = ">=0.6"
