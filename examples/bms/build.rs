@@ -30,6 +30,10 @@ fn main() {
 //   - example/demo/dbc-log/??? for static values
 //  Reference: iot.bzh/Redpesk canbus-rs code generator
 // -----------------------------------------------------------------------
+
+// Tell rustfmt (stable) to skip formatting this whole file
+#[rustfmt::skip]
+
 #[allow(
     warnings,
     clippy::all,

@@ -30,7 +30,6 @@ impl From<std::io::Error> for CanError {
     }
 }
 
-
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, Debug)]
 pub enum CanBcmOpCode {

@@ -60,9 +60,9 @@ fn main() -> Result<(), String> {
             ),
             SockCanOpCode::RxError(error) => {
                 println!("{error}");
-            }
+            },
             // if packet is partial just silently ignore it
-            _ => {}
+            _ => {},
         }
     }
 }

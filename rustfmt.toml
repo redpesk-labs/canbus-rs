@@ -1,0 +1,20 @@
+# Project edition
+edition = "2021"
+
+# Line width
+max_width = 100
+
+# Formatting heuristics (Max = more compact)
+use_small_heuristics = "Max"
+
+# Newlines (Unix)
+newline_style = "Unix"
+
+# Imports
+reorder_imports = true
+
+# Keep short method/iterator chains on one line when possible
+chain_width = 80
+
+# Add a trailing comma after the last field of multiline match blocks
+match_block_trailing_comma = true

@@ -83,7 +83,7 @@ fn main() -> Result<(), String> {
 
                 CanAnyFrame::Err(error) => {
                     panic!("Fail reading candev Error:{error}")
-                }
+                },
             },
 
             CanBcmOpCode::RxRead => match msg.get_raw() {
@@ -105,18 +105,18 @@ fn main() -> Result<(), String> {
 
                 CanAnyFrame::Err(error) => {
                     panic!("Fail reading candev Error:{error}")
-                }
+                },
             },
 
             CanBcmOpCode::RxStatus => {
                 println!("{count:4} BCM status filter canid:{:#04x}", msg.get_id().unwrap());
-            }
+            },
             CanBcmOpCode::RxSetup => {
                 println!("{count:4} BCM setup filter canid:{:#04x}", msg.get_id().unwrap());
-            }
+            },
             CanBcmOpCode::RxTimeout => {
                 println!("{count:4} BCM Timeout canid:{:#04x}", msg.get_id().unwrap());
-            }
+            },
             _ => panic!("unsupported bcm opcode:{:?}", msg.get_opcode()),
         }
     }

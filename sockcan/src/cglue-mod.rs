@@ -20,18 +20,19 @@
  *  https://www.gnu.org/licenses/gpl-3.0.html.
  * $RP_END_LICENSE$
  */
- 
+
 #![allow(dead_code)]
 #![allow(non_upper_case_globals)]
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 
-#[allow(clippy::unreadable_literal,
-        clippy::struct_field_names,
-        clippy::pub_underscore_fields,
-        clippy::ref_as_ptr,
-        clippy::ptr_as_ptr
-        )]
+#[allow(
+    clippy::unreadable_literal,
+    clippy::struct_field_names,
+    clippy::pub_underscore_fields,
+    clippy::ref_as_ptr,
+    clippy::ptr_as_ptr
+)]
 mod capi_map {
     include!(concat!(env!("OUT_DIR"), "/sockcan-map.rs"));
 }
@@ -40,8 +41,8 @@ pub use capi_map::*;
 
 use std::ffi::CStr;
 use std::ffi::CString;
-use std::mem;
 use std::io;
+use std::mem;
 
 const MAX_ERROR_LEN: usize = 256;
 

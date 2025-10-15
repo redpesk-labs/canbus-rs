@@ -35,7 +35,7 @@ impl fmt::Display for CanDataStatus {
             CanDataStatus::Error => "Error",
             CanDataStatus::Unset => "Unset",
         };
-        write!(format, "{status}" )
+        write!(format, "{status}")
     }
 }
 
@@ -111,7 +111,7 @@ impl CanDbcType {
     {
         match Self::convert(self) {
             Ok(val) => Ok(val),
-            Err(e)  => Err(e), // propagate the CanError from convert(...)
+            Err(e) => Err(e), // propagate the CanError from convert(...)
         }
     }
 }
@@ -202,7 +202,6 @@ pub trait CanDbcMessage {
     fn set_callback(&mut self, callback: Box<dyn CanMsgCtrl>);
     fn get_listeners(&self) -> i32;
 }
-
 
 pub trait CanDbcPool {
     /// Returns the list of known CAN IDs handled by this pool.

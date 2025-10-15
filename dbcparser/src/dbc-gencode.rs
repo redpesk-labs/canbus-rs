@@ -12,8 +12,8 @@
  * Reference: http://mcu.so/Microcontroller/Automotive/dbc-file-format-documentation_compress.pdf
  */
 use crate::data::{
-    ByteOrder, DbcObject, Message, MessageId, MultiplexIndicator, SigCodeGen, Signal, Transmitter,
-    ValDescription, ValueType, MsgCodeGen,
+    ByteOrder, DbcObject, Message, MessageId, MsgCodeGen, MultiplexIndicator, SigCodeGen, Signal,
+    Transmitter, ValDescription, ValueType,
 };
 use heck::{ToSnakeCase, ToUpperCamelCase};
 
@@ -84,8 +84,8 @@ impl ValDescription {
     fn get_data_value(&self, data: &str) -> String {
         match data {
             "bool" => format!("{}", (self.a as i64) == 1),
-            "f64"  => format!("{}_f64", self.a),
-            _      => format!("{}_{}", self.a as i64, data),
+            "f64" => format!("{}_f64", self.a),
+            _ => format!("{}_{}", self.a as i64, data),
         }
     }
 }
@@ -109,18 +109,17 @@ impl Signal {
         let end_bit = self.start_bit + self.size;
 
         if start_bit > msg_bits {
-            return Err(Error::other(
-                format!(
-                    "signal:{} starts at {}, but message is only {} bits",
-                    self.name, start_bit, msg_bits
-                ),
-            ));
+            return Err(Error::other(format!(
+                "signal:{} starts at {}, but message is only {} bits",
+                self.name, start_bit, msg_bits
+            )));
         }
 
         if end_bit > msg_bits {
-            return Err(Error::other(
-                format!("signal:{} ends at {}, but message is only {} bits", self.name, end_bit, msg_bits),
-            ));
+            return Err(Error::other(format!(
+                "signal:{} ends at {}, but message is only {} bits",
+                self.name, end_bit, msg_bits
+            )));
         }
 
         Ok((start_bit, end_bit))
@@ -147,18 +146,17 @@ impl Signal {
         };
 
         if start_bit > msg_bits {
-            return Err(Error::other(
-                format!("signal:{} starts at {}, but message is only {} bits", self.name, start_bit, msg_bits),
-            ));
+            return Err(Error::other(format!(
+                "signal:{} starts at {}, but message is only {} bits",
+                self.name, start_bit, msg_bits
+            )));
         }
 
         if end_bit > msg_bits {
-            return Err(Error::other(
-                format!(
-                    "signal:{} ends at {}, but message is only {} bits",
-                    self.name, end_bit, msg_bits
-                ),
-            ));
+            return Err(Error::other(format!(
+                "signal:{} ends at {}, but message is only {} bits",
+                self.name, end_bit, msg_bits
+            )));
         }
 
         Ok((start_bit, end_bit))
@@ -197,13 +195,13 @@ impl Signal {
             "f64".into()
         } else {
             let size = match self.size {
-                n if n <= 8  => "8",
+                n if n <= 8 => "8",
                 n if n <= 16 => "16",
                 n if n <= 32 => "32",
-                _            => "64",
+                _ => "64",
             };
             match self.value_type {
-                ValueType::Signed   => format!("i{size}"),
+                ValueType::Signed => format!("i{size}"),
                 ValueType::Unsigned => format!("u{size}"),
             }
         }
@@ -229,7 +227,6 @@ impl Signal {
         }
     }
 }
-
 
 impl SigCodeGen<&DbcCodeGen> for Signal {
     #[allow(clippy::too_many_lines)]
@@ -271,7 +268,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
                     start = start_bit,
                     end = end_bit,
                 )
-            }
+            },
             ByteOrder::BigEndian => {
                 let (start_bit, end_bit) = self.be_start_end_bit(msg)?;
 
@@ -281,7 +278,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
                     start = start_bit,
                     end = end_bit
                 )
-            }
+            },
         };
 
         code_output!(code, IDT3, "match frame.opcode {")?;
@@ -715,7 +712,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
                     start_bit,
                     end_bit
                 )?;
-            }
+            },
             ByteOrder::BigEndian => {
                 let (start_bit, end_bit) = self.be_start_end_bit(msg)?;
                 code_output!(
@@ -725,7 +722,7 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
                     start_bit,
                     end_bit
                 )?;
-            }
+            },
         }
 
         code_output!(code, IDT3, "Ok(())")?;
@@ -754,8 +751,8 @@ impl SigCodeGen<&DbcCodeGen> for Signal {
             | MultiplexIndicator::MultiplexedSignal(_)
             | MultiplexIndicator::MultiplexorAndMultiplexedSignal(_) => {
                 // (optional) any shared handling for multiplexed cases
-            }
-}
+            },
+        }
 
         // fmt display for signal
         code_output!(code, IDT1, "impl fmt::Display for {} {{", self.get_type_kamel())?;
@@ -833,7 +830,9 @@ impl MsgCodeGen<&DbcCodeGen> for Message {
         code_output!(code, IDT2, "}\n")?;
 
         // set all message signals values
-        let args: Vec<String> = self.signals.iter()
+        let args: Vec<String> = self
+            .signals
+            .iter()
             .map(|signal| format!("{}: {}", signal.get_type_snake(), signal.get_data_type()))
             .collect();
 
@@ -1178,23 +1177,19 @@ impl DbcParser {
             Some(outfile) => {
                 let outfd = File::create(outfile.as_str())?;
                 Some(outfd)
-            }
+            },
             None => None,
         };
 
         // open/create output file
-        let code = DbcCodeGen {
-            dbcfd,
-            outfd,
-            range_check: self.range_check,
-            serde_json: self.serde_json,
-        };
+        let code =
+            DbcCodeGen { dbcfd, outfd, range_check: self.range_check, serde_json: self.serde_json };
 
         match self.header {
-            None => {}
+            None => {},
             Some(header) => {
                 code_output!(code, IDT1, header)?;
-            }
+            },
         }
 
         // change Rust default to stick as much as possible on can names
@@ -1269,8 +1264,7 @@ impl DbcParser {
         code_output!(code, IDT0, "impl CanMsgPool {")?;
 
         // extract canid from messages vector
-        let canids: Vec<u32> =
-            code.dbcfd.messages.iter().map(|msg| msg.id.to_u32()).collect();
+        let canids: Vec<u32> = code.dbcfd.messages.iter().map(|msg| msg.id.to_u32()).collect();
 
         code_output!(code, IDT1, "pub fn new(uid: &'static str) -> Self {")?;
         code_output!(code, IDT2, "CanMsgPool {")?;

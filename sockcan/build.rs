@@ -71,7 +71,9 @@ fn main() {
         .generate()
         .expect("Unable to generate sockcan");
 
-    sockcan.write_to_file("src/capi/sockcan-map.rs").expect("Couldn't write sockcan!");
+    sockcan
+        .write_to_file("src/capi/sockcan-map.rs")
+        .expect("Couldn't write sockcan!");
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
     let out_file = out_dir.join("sockcan-map.rs");

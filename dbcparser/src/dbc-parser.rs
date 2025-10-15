@@ -9,13 +9,13 @@
  */
 
 use crate::data::{
-     AccessNode, AccessType, AttributeDefault, AttributeDefinition, AttributeValue,
-     AttributeValuedForObjectType, AttributeValueForObject, Baudrate, ByteOrder, Comment,
-     DbcError, DbcObject, EnvType, EnvironmentVariable, EnvironmentVariableData,
-     ExtendedMultiplex, ExtendedMultiplexMapping, Message, MessageId, MessageTransmitter, Node,
-     Signal, SignalExtendedValueType, SignalExtendedValueTypeList, SignalGroups, SignalType,
-     SignalTypeRef, Symbol, Transmitter, ValDescription, ValueDescription, ValueTable,
-     MultiplexIndicator, ValueType, Version,
+    AccessNode, AccessType, AttributeDefault, AttributeDefinition, AttributeValue,
+    AttributeValueForObject, AttributeValuedForObjectType, Baudrate, ByteOrder, Comment, DbcError,
+    DbcObject, EnvType, EnvironmentVariable, EnvironmentVariableData, ExtendedMultiplex,
+    ExtendedMultiplexMapping, Message, MessageId, MessageTransmitter, MultiplexIndicator, Node,
+    Signal, SignalExtendedValueType, SignalExtendedValueTypeList, SignalGroups, SignalType,
+    SignalTypeRef, Symbol, Transmitter, ValDescription, ValueDescription, ValueTable, ValueType,
+    Version,
 };
 use std::str;
 
@@ -290,13 +290,7 @@ fn message(s: &str) -> IResult<&str, Message> {
     let (s, signals) = many0(signal)(s)?;
     Ok((
         s,
-        (Message {
-            id: message_id,
-            name: message_name,
-            size: message_size,
-            transmitter,
-            signals,
-        }),
+        (Message { id: message_id, name: message_name, size: message_size, transmitter, signals }),
     ))
 }
 
@@ -667,7 +661,7 @@ fn attribute_value_for_object(s: &str) -> IResult<&str, AttributeValueForObject>
 fn attribute_definition_node(s: &str) -> IResult<&str, AttributeDefinition> {
     let (s, _) = tag("BU_")(s)?;
     let (s, _) = ms1(s)?;
-    let (s, node)    = take_till(is_semi_colon)(s)?;
+    let (s, node) = take_till(is_semi_colon)(s)?;
     Ok((s, AttributeDefinition::Node(node.to_string())))
 }
 
@@ -675,7 +669,7 @@ fn attribute_definition_node(s: &str) -> IResult<&str, AttributeDefinition> {
 fn attribute_definition_signal(s: &str) -> IResult<&str, AttributeDefinition> {
     let (s, _) = tag("SG_")(s)?;
     let (s, _) = ms1(s)?;
-    let (s, signal)  = take_till(is_semi_colon)(s)?;
+    let (s, signal) = take_till(is_semi_colon)(s)?;
     Ok((s, AttributeDefinition::Signal(signal.to_string())))
 }
 
@@ -697,7 +691,7 @@ fn attribute_definition_message(s: &str) -> IResult<&str, AttributeDefinition> {
 
 // TODO add properties
 fn attribute_definition_plain(s: &str) -> IResult<&str, AttributeDefinition> {
-    let (s, plain)   = take_till(is_semi_colon)(s)?;
+    let (s, plain) = take_till(is_semi_colon)(s)?;
     Ok((s, AttributeDefinition::Plain(plain.to_string())))
 }
 
@@ -880,35 +874,29 @@ fn signal_groups(s: &str) -> IResult<&str, SignalGroups> {
 /// input remains after parsing.
 pub fn dbc_from_str(dbc_str: &str) -> Result<DbcObject, DbcError<'_>> {
     match dbc_parse_str(dbc_str) {
-        Ok((remaining, object)) => {
-            match multispace0::<&str, ()>(remaining) {
-                Ok((ascii, _)) => {
-                    if !ascii.is_empty() {
-                        println!("Unprocessed DBC: {ascii}");
-                        return Err(DbcError {
-                            uid: "parsing-not-completed",
-                            error: Error::Incomplete(remaining),
-                            info: "fail to parse dbc input".to_owned(),
-                        });
-                    }
-                    Ok(object)
-                }
-                Err(_error) => {
-                    Err(DbcError {
-                        uid: "parsing-not-clean",
-                        error: Error::Misc,
+        Ok((remaining, object)) => match multispace0::<&str, ()>(remaining) {
+            Ok((ascii, _)) => {
+                if !ascii.is_empty() {
+                    println!("Unprocessed DBC: {ascii}");
+                    return Err(DbcError {
+                        uid: "parsing-not-completed",
+                        error: Error::Incomplete(remaining),
                         info: "fail to parse dbc input".to_owned(),
-                    })
+                    });
                 }
-            }
-        }
-        Err(error) => {
-            Err(DbcError {
-                uid: "parsing-fail",
-                error: Error::Parsing(error.to_string()),
-                info: "fail to parse full dbc input".to_owned(),
-            })
-        }
+                Ok(object)
+            },
+            Err(_error) => Err(DbcError {
+                uid: "parsing-not-clean",
+                error: Error::Misc,
+                info: "fail to parse dbc input".to_owned(),
+            }),
+        },
+        Err(error) => Err(DbcError {
+            uid: "parsing-fail",
+            error: Error::Parsing(error.to_string()),
+            info: "fail to parse full dbc input".to_owned(),
+        }),
     }
 }
 

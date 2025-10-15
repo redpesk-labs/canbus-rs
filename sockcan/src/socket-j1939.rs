@@ -160,9 +160,9 @@ impl SockCanJ1939 for SockCanHandle {
         SockCanHandle: CanIFaceFrom<T>,
     {
         // Safer: fall back to i32::MAX if the constant doesn't fit
-        let pf_can  = i32::try_from(cglue::can_SOCK_x_PF_CAN).unwrap_or(i32::MAX);
-        let dgram   = i32::try_from(cglue::can_SOCK_x_DGRAM).unwrap_or(i32::MAX);
-        let j1939   = i32::try_from(cglue::can_SOCK_x_J1939).unwrap_or(i32::MAX);
+        let pf_can = i32::try_from(cglue::can_SOCK_x_PF_CAN).unwrap_or(i32::MAX);
+        let dgram = i32::try_from(cglue::can_SOCK_x_DGRAM).unwrap_or(i32::MAX);
+        let j1939 = i32::try_from(cglue::can_SOCK_x_J1939).unwrap_or(i32::MAX);
         let sockfd = unsafe { cglue::socket(pf_can, dgram, j1939) };
 
         if sockfd < 0 {
@@ -184,9 +184,11 @@ impl SockCanJ1939 for SockCanHandle {
         match mode {
             SockJ1939Addr::Promiscuous => {
                 let flag: u32 = 1;
-                let sol_can_j1939 = i32::try_from(cglue::can_J1939_x_SOL_CAN_J1939).unwrap_or(i32::MAX);
-                let so_promisc    = i32::try_from(cglue::can_J1939_x_SO_PROMISC).unwrap_or(i32::MAX);
-                let optlen        = cglue::socklen_t::try_from(core::mem::size_of::<u32>()).unwrap_or(u32::MAX);
+                let sol_can_j1939 =
+                    i32::try_from(cglue::can_J1939_x_SOL_CAN_J1939).unwrap_or(i32::MAX);
+                let so_promisc = i32::try_from(cglue::can_J1939_x_SO_PROMISC).unwrap_or(i32::MAX);
+                let optlen =
+                    cglue::socklen_t::try_from(core::mem::size_of::<u32>()).unwrap_or(u32::MAX);
                 let status = unsafe {
                     cglue::setsockopt(
                         sockfd,
@@ -203,18 +205,21 @@ impl SockCanJ1939 for SockCanHandle {
 
                 canaddr.can_addr.j1939 = cglue::sockaddr_can__bindgen_ty_1__bindgen_ty_2 {
                     name: u64::from(cglue::can_J1939_x_NO_NAME),
-                    pgn:  cglue::can_J1939_x_NO_PGN,
+                    pgn: cglue::can_J1939_x_NO_PGN,
                     addr: u8::try_from(cglue::can_J1939_x_NO_ADDR).unwrap_or(u8::MAX),
                 };
-            }
+            },
 
             SockJ1939Addr::Filter(ecu) => {
                 if ecu.addr == u8::try_from(cglue::can_J1939_x_NO_ADDR).unwrap_or(u8::MAX) {
                     // broadcast require for address claim
                     let flag: u32 = 1;
-                    let sol_socket   = i32::try_from(cglue::can_SOCK_x_SOL_SOCKET).unwrap_or(i32::MAX);
-                    let so_broadcast = i32::try_from(cglue::can_SOCK_x_SO_BROADCAST).unwrap_or(i32::MAX);
-                    let optlen       = cglue::socklen_t::try_from(core::mem::size_of::<u32>()).unwrap_or(u32::MAX);
+                    let sol_socket =
+                        i32::try_from(cglue::can_SOCK_x_SOL_SOCKET).unwrap_or(i32::MAX);
+                    let so_broadcast =
+                        i32::try_from(cglue::can_SOCK_x_SO_BROADCAST).unwrap_or(i32::MAX);
+                    let optlen =
+                        cglue::socklen_t::try_from(core::mem::size_of::<u32>()).unwrap_or(u32::MAX);
                     let status = unsafe {
                         cglue::setsockopt(
                             sockfd,
@@ -232,17 +237,18 @@ impl SockCanJ1939 for SockCanHandle {
 
                 canaddr.can_addr.j1939 = cglue::sockaddr_can__bindgen_ty_1__bindgen_ty_2 {
                     name: ecu.name,
-                    pgn:  ecu.pgn,
+                    pgn: ecu.pgn,
                     addr: u8::try_from(cglue::can_J1939_x_IDLE_ADDR).unwrap_or(u8::MAX),
                 };
-            }
+            },
         }
 
         let sockaddr = cglue::__CONST_SOCKADDR_ARG {
             __sockaddr__: (&raw const canaddr).cast::<cglue::sockaddr>(),
         };
 
-        let namelen = cglue::socklen_t::try_from(core::mem::size_of::<cglue::sockaddr_can>()).unwrap_or(u32::MAX);
+        let namelen = cglue::socklen_t::try_from(core::mem::size_of::<cglue::sockaddr_can>())
+            .unwrap_or(u32::MAX);
         let status = unsafe { cglue::bind(sockfd, sockaddr, namelen) };
         if status < 0 {
             return Err(CanError::new("fail-sockj1939-bind", cglue::get_perror()));
@@ -250,7 +256,7 @@ impl SockCanJ1939 for SockCanHandle {
 
         match sockcan.set_timestamp(timestamp) {
             Err(error) => return Err(error),
-            Ok(_value) => {}
+            Ok(_value) => {},
         }
 
         Ok(sockcan)
@@ -461,7 +467,7 @@ impl SockJ1939Filters {
                 Err(_code) => Err(CanError::new("message-get_mut", "internal fastpkg pool error")),
                 Ok(mut_ref) => Ok(mut_ref),
             },
-            Err(_) => Err(CanError::new("fail-fastpgn-search", format!("canid:{pgn} not found" ))),
+            Err(_) => Err(CanError::new("fail-fastpgn-search", format!("canid:{pgn} not found"))),
         }
     }
 
@@ -499,22 +505,16 @@ impl SockJ1939Filters {
         }
 
         // register filter list
-        let sol_can_j1939: i32 = i32::try_from(cglue::can_J1939_x_SOL_CAN_J1939).unwrap_or(i32::MAX);
-        let so_filter: i32     = i32::try_from(cglue::can_J1939_x_SO_FILTER).unwrap_or(i32::MAX);
-        let opt_ptr             = j1939_filter.as_ptr().cast::<std::ffi::c_void>();
+        let sol_can_j1939: i32 =
+            i32::try_from(cglue::can_J1939_x_SOL_CAN_J1939).unwrap_or(i32::MAX);
+        let so_filter: i32 = i32::try_from(cglue::can_J1939_x_SO_FILTER).unwrap_or(i32::MAX);
+        let opt_ptr = j1939_filter.as_ptr().cast::<std::ffi::c_void>();
         let opt_len: cglue::socklen_t =
             cglue::socklen_t::try_from(mem::size_of::<cglue::j1939_filter>() * filter_len)
                 .unwrap_or(u32::MAX);
 
-        let status = unsafe {
-            cglue::setsockopt(
-                sock.sockfd,
-                sol_can_j1939,
-                so_filter,
-                opt_ptr,
-                opt_len,
-            )
-        };
+        let status =
+            unsafe { cglue::setsockopt(sock.sockfd, sol_can_j1939, so_filter, opt_ptr, opt_len) };
 
         if status < 0 {
             return Err(CanError::new("fail-j1939-filter", cglue::get_perror()));

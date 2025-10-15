@@ -23,6 +23,10 @@ const HEADER: &str = "
 //   - example/demo/dbc-log/??? for static values
 //  Reference: iot.bzh/Redpesk canbus-rs code generator
 // -----------------------------------------------------------------------
+
+// Tell rustfmt (stable) to skip formatting this whole file
+#[rustfmt::skip]
+
 #![allow(
 warnings,
 clippy::all,
@@ -48,7 +52,11 @@ fn main() -> io::Result<()> {
     let dbcfile = args[1].as_str();
     let dumpfile = args[2].as_str();
 
-    DbcParser::new("Demo").dbcfile(dbcfile).outfile(dumpfile).header(HEADER).generate()?;
+    DbcParser::new("Demo")
+        .dbcfile(dbcfile)
+        .outfile(dumpfile)
+        .header(HEADER)
+        .generate()?;
 
     Ok(())
 }

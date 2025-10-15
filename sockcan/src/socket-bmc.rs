@@ -202,8 +202,8 @@ impl SockCanBmc for SockCanHandle {
         SockCanHandle: CanIFaceFrom<T>,
     {
         let af_can: i32 = i32::try_from(cglue::can_SOCK_x_AF_CAN).unwrap_or(i32::MAX);
-        let dgram:  i32 = i32::try_from(cglue::can_SOCK_x_DGRAM).unwrap_or(i32::MAX);
-        let bcm:    i32 = i32::try_from(cglue::can_SOCK_x_BCM).unwrap_or(i32::MAX);
+        let dgram: i32 = i32::try_from(cglue::can_SOCK_x_DGRAM).unwrap_or(i32::MAX);
+        let bcm: i32 = i32::try_from(cglue::can_SOCK_x_BCM).unwrap_or(i32::MAX);
         let sockfd = unsafe { cglue::socket(af_can, dgram, bcm) };
 
         if sockfd < 0 {
@@ -238,14 +238,13 @@ impl SockCanBmc for SockCanHandle {
 
         match sockcan.set_timestamp(timestamp) {
             Err(error) => return Err(error),
-            Ok(_value) => {}
+            Ok(_value) => {},
         }
 
         Ok(sockcan)
     }
 
     fn get_bcm_frame(&self) -> SockBcmMsg {
-        
         // 1) Use a zero-initialized byte buffer; avoid `assume_init()` UB on uninitialized arrays.
         let mut buffer: [u8; core::mem::size_of::<CanFdBcmOneMsg>()] =
             [0u8; core::mem::size_of::<CanFdBcmOneMsg>()];
@@ -256,13 +255,12 @@ impl SockCanBmc for SockCanHandle {
         // Precompute expected sizes and convert to `isize` safely (avoid direct casts)
         let sz_hdr = isize::try_from(core::mem::size_of::<CanBcmHeader>()).unwrap_or(isize::MAX);
         let sz_std = isize::try_from(core::mem::size_of::<CanBcmOneMsg>()).unwrap_or(isize::MAX);
-        let sz_fd  = isize::try_from(core::mem::size_of::<CanFdBcmOneMsg>()).unwrap_or(isize::MAX);
+        let sz_fd = isize::try_from(core::mem::size_of::<CanFdBcmOneMsg>()).unwrap_or(isize::MAX);
 
         // 2) Safely read the header (for opcode) from an unaligned byte buffer.
         //    `read_unaligned` avoids undefined behavior due to potential misalignment.
-        let header_for_opcode: CanBcmHeader = unsafe {
-            core::ptr::read_unaligned((&raw const buffer).cast::<CanBcmHeader>())
-        };
+        let header_for_opcode: CanBcmHeader =
+            unsafe { core::ptr::read_unaligned((&raw const buffer).cast::<CanBcmHeader>()) };
         let opcode = match CanBcmOpCode::from(header_for_opcode.0.opcode) {
             Ok(v) => v,
             Err(_) => CanBcmOpCode::Unknown,
@@ -301,9 +299,8 @@ impl SockCanBmc for SockCanHandle {
             }
         } else if info.count == sz_hdr {
             // Only a header received — read unaligned to extract `can_id`.
-            let header: CanBcmHeader = unsafe {
-                core::ptr::read_unaligned((&raw const buffer).cast::<CanBcmHeader>())
-            };
+            let header: CanBcmHeader =
+                unsafe { core::ptr::read_unaligned((&raw const buffer).cast::<CanBcmHeader>()) };
             CanAnyFrame::None(header.0.can_id)
         } else {
             // Unexpected size — return an error frame.
@@ -441,24 +438,20 @@ impl SockBcmCmd {
 
         if self.rx_watchdog > 0 {
             // Use clearer names to avoid similar-names lint and improve readability
-            let wd_seconds  = i64::try_from(self.rx_watchdog / 1000).unwrap_or(i64::MAX);
-            let wd_microsec = i64::try_from((self.rx_watchdog * 1000) % 1_000_000).unwrap_or(i64::MAX);
+            let wd_seconds = i64::try_from(self.rx_watchdog / 1000).unwrap_or(i64::MAX);
+            let wd_microsec =
+                i64::try_from((self.rx_watchdog * 1000) % 1_000_000).unwrap_or(i64::MAX);
 
-            head.ival1 = cglue::bcm_timeval {
-                tv_sec: wd_seconds,
-                tv_usec: wd_microsec,
-            };
+            head.ival1 = cglue::bcm_timeval { tv_sec: wd_seconds, tv_usec: wd_microsec };
         }
 
         if self.rx_maxrate > 0 {
             // Same here: distinct, descriptive names
-            let mr_seconds  = i64::try_from(self.rx_maxrate / 1000).unwrap_or(i64::MAX);
-            let mr_microsec = i64::try_from((self.rx_maxrate * 1000) % 1_000_000).unwrap_or(i64::MAX);
+            let mr_seconds = i64::try_from(self.rx_maxrate / 1000).unwrap_or(i64::MAX);
+            let mr_microsec =
+                i64::try_from((self.rx_maxrate * 1000) % 1_000_000).unwrap_or(i64::MAX);
 
-            head.ival2 = cglue::bcm_timeval {
-                tv_sec: mr_seconds,
-                tv_usec: mr_microsec,
-            };
+            head.ival2 = cglue::bcm_timeval { tv_sec: mr_seconds, tv_usec: mr_microsec };
         }
     }
     /// Applies the current BCM (Broadcast Manager) filter configuration to the given socket.
@@ -481,7 +474,7 @@ impl SockBcmCmd {
     /// - an internal borrow/state conflict prevents applying the configuration.
     pub fn apply(&mut self, sock: &SockCanHandle) -> Result<(), CanError> {
         match sock.mode {
-            SockCanMod::BCM => {}
+            SockCanMod::BCM => {},
             _ => return Err(CanError::new("invalid-socketcan-mod", "not a BCM socketcan")),
         }
 
@@ -509,11 +502,11 @@ impl SockBcmCmd {
                     }
                 } else if self.frames.is_empty() {
                     return Err(CanError::new(
-                            "invalid-socketcan-filter",
-                            "BCM:StdFrame no filter defined",
-                        ));
+                        "invalid-socketcan-filter",
+                        "BCM:StdFrame no filter defined",
+                    ));
                 }
-            }
+            },
 
             CanBcmOpCode::RxDelete => {
                 if !self.frames.is_empty() {
@@ -522,16 +515,16 @@ impl SockBcmCmd {
                         "BCM:RxDelete does not accept frames",
                     ));
                 }
-            }
+            },
             _ => {
                 return Err(CanError::new(
                     "invalid-bcm-operation",
                     "bcm operation not yet implemented",
                 ));
-            }
+            },
         }
 
-        let (buffer_addr, buffer_len) = 
+        let (buffer_addr, buffer_len) =
             if CanBcmFlag::check(&CanBcmFlag::FD_FRAME, self.flags.bits()) {
                 // fdcan can messages
                 // SAFETY: canfd_bcm_msg est un POD C ; une init à zéro est valide pour cet appel.
@@ -546,9 +539,12 @@ impl SockBcmCmd {
                     bcm_msg.fdframes[idx] = CanFdFrameRaw::empty(self.muxid[idx]).0;
                 }
 
-                bcm_msg.head.nframes = u32::try_from(self.muxid.len().saturating_add(self.frames.len())).unwrap_or(u32::MAX);
+                bcm_msg.head.nframes =
+                    u32::try_from(self.muxid.len().saturating_add(self.frames.len()))
+                        .unwrap_or(u32::MAX);
                 let buffer = (&raw const bcm_msg).cast::<::std::os::raw::c_void>();
-                let len = mem::size_of::<cglue::bcm_msg_head>() + bcm_msg.head.nframes as usize * mem::size_of::<cglue::can_frame>();
+                let len = mem::size_of::<cglue::bcm_msg_head>()
+                    + bcm_msg.head.nframes as usize * mem::size_of::<cglue::can_frame>();
                 (buffer, len)
             } else {
                 // standard can messages
@@ -565,7 +561,8 @@ impl SockBcmCmd {
                     bcm_msg.frames[idx] = CanFrameRaw::empty(self.muxid[idx]).0;
                 }
 
-                bcm_msg.head.nframes = u32::try_from(self.muxid.len() + self.frames.len()).unwrap_or(u32::MAX);
+                bcm_msg.head.nframes =
+                    u32::try_from(self.muxid.len() + self.frames.len()).unwrap_or(u32::MAX);
                 let buffer = (&raw const bcm_msg).cast::<::std::os::raw::c_void>();
                 let len = mem::size_of::<cglue::bcm_msg_head>()
                     + bcm_msg.head.nframes as usize * mem::size_of::<cglue::can_frame>();

@@ -15,7 +15,7 @@ use std::io::prelude::*;
 
 use std::fmt;
 
-#[derive(Debug)]                 // ← add this
+#[derive(Debug)] // ← add this
 pub struct DbcError<'a> {
     pub uid: &'static str,
     pub info: String,
@@ -43,7 +43,7 @@ impl fmt::Display for DbcError<'_> {
 impl std::error::Error for Error<'_> {}
 
 /// Parser error kinds.
-#[derive(Debug)]                 // ← and this
+#[derive(Debug)] // ← and this
 pub enum Error<'a> {
     /// Remaining string; the `DbcObject` was only read partially.
     /// Occurs when, e.g., an unexpected symbol appears.
@@ -466,12 +466,12 @@ impl DbcObject {
         match dbc_buffer() {
             Err(error) => {
                 Err(DbcError { uid: filename, error: Error::Misc, info: error.to_string() })
-            }
+            },
             Ok(buffer) => {
                 let slice = buffer.leak();
                 let data = std::str::from_utf8(slice).unwrap();
                 dbc_from_str(data)
-            }
+            },
         }
     }
     /// Parse a DBC object from a UTF-8 string.
@@ -493,71 +493,75 @@ impl DbcObject {
         None
     }
 
-#[must_use]
-pub fn message_comment(&self, message_id: MessageId) -> Option<&str> {
-    self.comments.iter().find_map(|x| match x {
-        Comment::Message { message_id: x_message_id, comment } => {
-            if x_message_id.0 == message_id.0 { Some(comment.as_str()) } else { None }
-        }
-        _ => None,
-    })
-}
+    #[must_use]
+    pub fn message_comment(&self, message_id: MessageId) -> Option<&str> {
+        self.comments.iter().find_map(|x| match x {
+            Comment::Message { message_id: x_message_id, comment } => {
+                if x_message_id.0 == message_id.0 {
+                    Some(comment.as_str())
+                } else {
+                    None
+                }
+            },
+            _ => None,
+        })
+    }
 
-#[must_use]
-pub fn signal_comment(&self, message_id: MessageId, signal_name: &str) -> Option<&str> {
-    self.comments.iter().find_map(|x| match x {
-        Comment::Signal { message_id: x_message_id, signal_name: x_signal_name, comment } => {
+    #[must_use]
+    pub fn signal_comment(&self, message_id: MessageId, signal_name: &str) -> Option<&str> {
+        self.comments.iter().find_map(|x| match x {
+            Comment::Signal { message_id: x_message_id, signal_name: x_signal_name, comment } => {
+                if x_message_id.0 == message_id.0 && x_signal_name == signal_name {
+                    Some(comment.as_str())
+                } else {
+                    None
+                }
+            },
+            _ => None,
+        })
+    }
+
+    #[must_use]
+    pub fn value_descriptions_for_signal(
+        &self,
+        message_id: MessageId,
+        signal_name: &str,
+    ) -> Option<&[ValDescription]> {
+        self.value_descriptions.iter().find_map(|x| match x {
+            ValueDescription::Signal {
+                message_id: x_message_id,
+                signal_name: x_signal_name,
+                value_descriptions,
+            } => {
+                if x_message_id.0 == message_id.0 && x_signal_name == signal_name {
+                    Some(value_descriptions.as_slice())
+                } else {
+                    None
+                }
+            },
+            ValueDescription::EnvironmentVariable { .. } => None,
+        })
+    }
+
+    #[must_use]
+    pub fn extended_value_type_for_signal(
+        &self,
+        message_id: MessageId,
+        signal_name: &str,
+    ) -> Option<&SignalExtendedValueType> {
+        self.signal_extended_value_type_list.iter().find_map(|x| {
+            let SignalExtendedValueTypeList {
+                message_id: x_message_id,
+                signal_name: x_signal_name,
+                signal_extended_value_type,
+            } = x;
             if x_message_id.0 == message_id.0 && x_signal_name == signal_name {
-                Some(comment.as_str())
+                Some(signal_extended_value_type)
             } else {
                 None
             }
-        }
-        _ => None,
-    })
-}
-
-#[must_use]
-pub fn value_descriptions_for_signal(
-    &self,
-    message_id: MessageId,
-    signal_name: &str,
-) -> Option<&[ValDescription]> {
-    self.value_descriptions.iter().find_map(|x| match x {
-        ValueDescription::Signal {
-            message_id: x_message_id,
-            signal_name: x_signal_name,
-            value_descriptions,
-        } => {
-            if x_message_id.0 == message_id.0 && x_signal_name == signal_name {
-                Some(value_descriptions.as_slice())
-            } else {
-                None
-            }
-        }
-        ValueDescription::EnvironmentVariable { .. } => None,
-    })
-}
-
-#[must_use]
-pub fn extended_value_type_for_signal(
-    &self,
-    message_id: MessageId,
-    signal_name: &str,
-) -> Option<&SignalExtendedValueType> {
-    self.signal_extended_value_type_list.iter().find_map(|x| {
-        let SignalExtendedValueTypeList {
-            message_id: x_message_id,
-            signal_name: x_signal_name,
-            signal_extended_value_type,
-        } = x;
-        if x_message_id.0 == message_id.0 && x_signal_name == signal_name {
-            Some(signal_extended_value_type)
-        } else {
-            None
-        }
-    })
-}
+        })
+    }
 
     /// Lookup the message multiplexor switch signal for a given message.
     /// This does not work for extended multiplexed messages; if multiple multiplexors
