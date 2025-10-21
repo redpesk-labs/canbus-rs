@@ -7,9 +7,14 @@
  *
  */
 extern crate sockcan;
+use env_logger::Env;
 use sockcan::prelude::*;
 
 fn main() -> Result<(), String> {
+    // Initialize logging backend for the `log` facade (idempotent).
+    let env = Env::default().default_filter_or("info");
+    let _ = env_logger::Builder::from_env(env).format_timestamp_millis().try_init();
+
     const VCAN: &str = "vcan0";
 
     let sockfd = match SockCanHandle::open_raw(VCAN, CanTimeStamp::CLASSIC) {
@@ -25,32 +30,20 @@ fn main() -> Result<(), String> {
         return Err(format!("raw-filter fail filter Error:{error}"));
     }
 
-    // check a full frame
-    let frame = sockfd.get_can_frame();
-    let frame_id = frame.get_id().unwrap();
-    let frame_len = frame.get_len().unwrap();
-    let frame_stamp = frame.get_stamp();
-    let frame_data = frame.get_data();
-    let frame_source = sockfd.get_ifname(frame.get_iface()).unwrap();
-    println!(
-        "Received FdFrame id:{frame_id:#04x} stamp:{frame_stamp} source:{frame_source} \
-        len:{frame_len} data:{frame_data:?}"
-    );
-
-    println!("Waiting for Raw CAN package");
+    log::info!("Waiting for Raw CAN package");
     loop {
         let frame = sockfd.get_can_frame();
         let frame_stamp = frame.get_stamp();
         let frame_data = frame.get_data();
         match frame.get_raw() {
-            CanAnyFrame::RawFd(frame) => println!(
+            CanAnyFrame::RawFd(frame) => log::info!(
                 "Received FdFrame id:{:#04x} stamp:{} len:{} data:{:?}",
                 frame.get_id(),
                 frame_stamp,
                 frame.get_len(),
                 frame_data
             ),
-            CanAnyFrame::RawStd(frame) => println!(
+            CanAnyFrame::RawStd(frame) => log::info!(
                 "Received StdFrame id:{:#04x} stamp:{}, len:{} data:{:?}",
                 frame.get_id(),
                 frame_stamp,
