@@ -9,6 +9,7 @@
 
 extern crate dbcparser;
 use dbcparser::prelude::*;
+use env_logger::Env;
 
 use std::env;
 use std::io::{self, Error};
@@ -38,11 +39,15 @@ clippy::similar_names
 ";
 
 fn main() -> io::Result<()> {
+    // Initialize logging backend for the `log` facade (idempotent).
+    let env = Env::default().default_filter_or("info");
+    let _ = env_logger::Builder::from_env(env).format_timestamp_millis().try_init();
+
     let args: Vec<String> = env::args().collect();
 
     if args.len() != 3 {
-        println!("SYNTAX-Error => can-dbc '/xxx/file.dbc' '/yyyy/candump.log'");
-        println!(
+        log::info!("SYNTAX-Error => can-dbc '/xxx/file.dbc' '/yyyy/candump.log'");
+        log::info!(
             "example: {} 'examples/dbc-log/model3can.dbc' 'examples/dbc-log/candump.log'",
             args[0]
         );

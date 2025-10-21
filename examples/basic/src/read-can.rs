@@ -50,8 +50,10 @@ fn main() -> Result<(), String> {
                 frame.get_len(),
                 frame_data
             ),
-            CanAnyFrame::Err(error) => panic!("Fail reading candev Error:{error}"),
-            CanAnyFrame::None(canid) => println!("Got timeout canid:{canid}"),
+            CanAnyFrame::Err(error) => {
+                return Err(format!("fail reading candev: {error}"));
+            },
+            CanAnyFrame::None(canid) => log::debug!("Got timeout canid:{canid}"),
         }
     }
 }
