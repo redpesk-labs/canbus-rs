@@ -55,9 +55,8 @@ fn main() -> Result<(), String> {
         let frame = sock.get_j1939_frame();
         match frame.get_opcode() {
             SockCanOpCode::RxRead(_data) => println!(
-                "({:4}) J1939 pgn:{:#04x}({}) stamp:{} len:{} data:{}",
+                "({:4}) J1939 pgn:{:#04x} stamp:{} len:{} data:{}",
                 count,
-                frame.get_pgn(),
                 frame.get_pgn(),
                 frame.get_stamp(),
                 frame.get_len(),
