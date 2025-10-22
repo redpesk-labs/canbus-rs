@@ -333,60 +333,115 @@ impl SockJ1939Fast {
     }
 
     pub fn push(&mut self, buffer: &[u8], _len: isize) -> SockCanOpCode {
-        //println!("buffer: {:#02x?}:{:#02x?}  len:{}", buffer[0], buffer[1],len);
         #[cfg(debug_assertions)]
-        debug!("buffer: {:#02x?}:{:#02x?}  len:{}", buffer[0], buffer[1], _len);
+        debug!(
+            "buffer: {:#02x?}:{:#02x?}  len:{}",
+            buffer.first().copied().unwrap_or(0),
+            buffer.get(1).copied().unwrap_or(0),
+            _len
+        );
 
-        // first message has no frame_idx but len on 2 bytes
-        if buffer[0].trailing_zeros() >= 4 {
-            // numero serial number is coded on initial 4 bits of the message
-            self.frame_count = buffer[0] >> 4;
+        // need at least header + len (first frame) or header + 1 payload byte (next frames)
+        if buffer.len() < 2 {
+            return SockCanOpCode::RxError(CanError::new(
+                "j1939-fastpkg-buffer",
+                format!("pgn:{} buffer too short: {}", self.pgn, buffer.len()),
+            ));
+        }
 
+        const HEADER_IDX: usize = 0;
+        const LEN_IDX: usize = 1;
+        const FIRST_FRAME_PAYLOAD_START: usize = 2; // first frame carries 6 bytes (2..8)
+        const NEXT_FRAME_PAYLOAD_START: usize = 1; // next frames carry 7 bytes (1..8)
+        const FIRST_FRAME_PAYLOAD_MAX: usize = 6;
+        const NEXT_FRAME_PAYLOAD_MAX: usize = 7;
+
+        let hdr = buffer[HEADER_IDX];
+        let frame_serial = hdr >> 4; // upper nibble: serial number for the whole message
+        let frame_index = hdr & 0x0F; // lower nibble: index within the message
+
+        // first frame when lower nibble == 0 (multiple of 16)
+        let is_first_frame = frame_index == 0;
+
+        if is_first_frame {
             // previous message we uncompleted
             if !self.data.is_empty() {
                 warn!("data lost: frame_len:{} data_len:{}", self.frame_len, self.data.len());
                 self.reset();
             }
+            // read total message length from byte[1] of the first frame
+            self.frame_len = u16::from(buffer[LEN_IDX]);
 
-            // check packet len fit PGN description
-            self.frame_len = u16::from(buffer[1]);
+            // capacity check
             if self.frame_len > self.capacity {
                 return SockCanOpCode::RxError(CanError::new(
                     "j1939-fastpkg-pgnlen",
                     format!(
-                        "message pgn:{} len:{} bigger than capacity: {}",
-                        self.pgn,
-                        self.frame_len,
-                        self.data.len()
+                        "message pgn:{} len:{} bigger than capacity:{}",
+                        self.pgn, self.frame_len, self.capacity
                     ),
                 ));
             }
 
-            self.data.extend_from_slice(&buffer[2..8]);
-            self.frame_idx = 1;
-        } else {
-            if (self.frame_idx != (buffer[0] & 0x0f)) || self.frame_count != (buffer[0] >> 4) {
-                self.reset();
-                return SockCanOpCode::RxError(CanError::new(
-                    "j1939-fastpkg-sequence",
-                    format!("pgn:{} message sequence ordering broken", self.pgn),
-                ));
+            self.frame_count = frame_serial;
+            self.frame_idx = 1; // next frame expected has index 1
+
+            // append up to 6 bytes (2..8), but only what we still need
+            let need = self.frame_len as usize;
+            let avail = buffer.len().saturating_sub(FIRST_FRAME_PAYLOAD_START);
+            let take = FIRST_FRAME_PAYLOAD_MAX.min(avail).min(need);
+            if take > 0 {
+                self.data.extend_from_slice(
+                    &buffer[FIRST_FRAME_PAYLOAD_START..FIRST_FRAME_PAYLOAD_START + take],
+                );
             }
 
-            for &b in buffer.iter().skip(1).take(7) {
-                self.data.push(b);
-                if self.frame_len as usize == self.data.len() {
-                    let response = SockCanOpCode::RxRead(self.data.clone());
-                    self.reset();
-                    return response;
-                }
+            if self.data.len() == need {
+                let response = SockCanOpCode::RxRead(self.data.clone());
+                self.reset();
+                return response;
             }
-            self.frame_idx += 1;
+
+            return SockCanOpCode::RxPartial(self.frame_idx);
         }
+
+        // subsequent frames: check continuity (both serial and index)
+        if self.frame_count != frame_serial || self.frame_idx != frame_index {
+            self.reset();
+            return SockCanOpCode::RxError(CanError::new(
+                "j1939-fastpkg-sequence",
+                format!("pgn:{} message sequence ordering broken", self.pgn),
+            ));
+        }
+
+        // append up to 7 bytes (1..8), but only what we still need
+        let need = (self.frame_len as usize).saturating_sub(self.data.len());
+        if need == 0 {
+            // should not happen, but guard anyway
+            let response = SockCanOpCode::RxRead(self.data.clone());
+            self.reset();
+            return response;
+        }
+
+        let avail = buffer.len().saturating_sub(NEXT_FRAME_PAYLOAD_START);
+        let take = NEXT_FRAME_PAYLOAD_MAX.min(avail).min(need);
+        if take > 0 {
+            self.data.extend_from_slice(
+                &buffer[NEXT_FRAME_PAYLOAD_START..NEXT_FRAME_PAYLOAD_START + take],
+            );
+        }
+
+        if self.data.len() == self.frame_len as usize {
+            let response = SockCanOpCode::RxRead(self.data.clone());
+            self.reset();
+            return response;
+        }
+
+        // expect next fragment
+        self.frame_idx = self.frame_idx.saturating_add(1);
         SockCanOpCode::RxPartial(self.frame_idx)
     }
 }
-
 pub struct SockJ1939Filters {
     filter: Vec<cglue::j1939_filter>,
     fastpkg: Vec<RefCell<SockJ1939Fast>>,
