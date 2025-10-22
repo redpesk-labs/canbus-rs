@@ -21,6 +21,9 @@ use crate::prelude::*;
 use std::mem::{self};
 
 pub type SockCanId = cglue::canid_t;
+
+const CAN_EFF_FLAG: u32 = 0x8000_0000;
+
 bitflags! {
     #[derive(PartialEq, Eq, Debug)]
     pub struct FilterMask: cglue::canid_t {
@@ -95,7 +98,7 @@ impl CanFrameRaw {
 
     #[must_use]
     pub fn get_id(&self) -> SockCanId {
-        self.0.can_id as SockCanId
+        (self.0.can_id as SockCanId) & !CAN_EFF_FLAG
     }
 
     #[must_use]
@@ -830,6 +833,7 @@ impl SockCanHandle {
 
         msg_hdr.msg_iov = core::ptr::addr_of_mut!(iov);
         msg_hdr.msg_iovlen = 1;
+
         msg_hdr.msg_namelen =
             cglue::socklen_t::try_from(std::mem::size_of::<cglue::sockaddr_can>())
                 .unwrap_or(u32::MAX);

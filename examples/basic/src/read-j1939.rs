@@ -13,9 +13,14 @@
  */
 
 extern crate sockcan;
+use env_logger::Env;
 use sockcan::prelude::*;
 
 fn main() -> Result<(), String> {
+    // Initialize logging backend for the `log` facade (idempotent).
+    let env = Env::default().default_filter_or("info");
+    let _ = env_logger::Builder::from_env(env).format_timestamp_millis().try_init();
+
     const VCAN: &str = "vcan0";
 
     // open j1939 in promiscuous mode
@@ -32,7 +37,7 @@ fn main() -> Result<(), String> {
         .apply(&sock)
     {
         Err(error) => panic!("j1939-filter fail Error:{error}"),
-        Ok(()) => println!("sockj1939 filter PGN=129285 ready"),
+        Ok(()) => log::info!("sockj1939 filter PGN=129285 ready"),
     }
 
     // register NMEA user land fast packet protocol on top of J1939
@@ -50,16 +55,21 @@ fn main() -> Result<(), String> {
         let frame = sock.get_j1939_frame();
         match frame.get_opcode() {
             SockCanOpCode::RxRead(_data) => println!(
-                "({:4}) J1939 pgn:{:#04x}({}) stamp:{} len:{} data:{:x?}",
+                "({:4}) J1939 pgn:{:#04x}({}) stamp:{} len:{} data:{}",
                 count,
                 frame.get_pgn(),
                 frame.get_pgn(),
                 frame.get_stamp(),
                 frame.get_len(),
-                frame.get_data(),
+                frame
+                    .get_data()
+                    .iter()
+                    .map(|b| format!("{:02X}", b))
+                    .collect::<Vec<_>>()
+                    .join(" "),
             ),
             SockCanOpCode::RxError(error) => {
-                println!("{error}");
+                log::info!("{error}");
             },
             // if packet is partial just silently ignore it
             _ => {},

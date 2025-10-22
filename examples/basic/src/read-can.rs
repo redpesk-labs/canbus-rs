@@ -33,22 +33,32 @@ fn main() -> Result<(), String> {
     log::info!("Waiting for Raw CAN package");
     loop {
         let frame = sockfd.get_can_frame();
-        let frame_stamp = frame.get_stamp();
+        let _frame_stamp = frame.get_stamp();
         let frame_data = frame.get_data();
         match frame.get_raw() {
             CanAnyFrame::RawFd(frame) => log::info!(
-                "Received FdFrame id:{:#04x} stamp:{} len:{} data:{:?}",
+                "Received FdFrame {} {:X}  [{}] {}",
+                VCAN,
                 frame.get_id(),
-                frame_stamp,
                 frame.get_len(),
                 frame_data
+                    .unwrap()
+                    .iter()
+                    .map(|b| format!("{:02X}", b))
+                    .collect::<Vec<_>>()
+                    .join(" ")
             ),
             CanAnyFrame::RawStd(frame) => log::info!(
-                "Received StdFrame id:{:#04x} stamp:{}, len:{} data:{:?}",
+                "Received StdFrame {} {:X}  [{}] {}",
+                VCAN,
                 frame.get_id(),
-                frame_stamp,
                 frame.get_len(),
                 frame_data
+                    .unwrap()
+                    .iter()
+                    .map(|b| format!("{:02X}", b))
+                    .collect::<Vec<_>>()
+                    .join(" ")
             ),
             CanAnyFrame::Err(error) => {
                 return Err(format!("fail reading candev: {error}"));
