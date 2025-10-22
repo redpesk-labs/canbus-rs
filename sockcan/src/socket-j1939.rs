@@ -13,6 +13,7 @@
  *    https://www.engr.colostate.edu/~jdaily/J1939/candata.html
  *
 */
+use log::{debug, warn};
 
 use super::cglue;
 use crate::prelude::*;
@@ -333,6 +334,8 @@ impl SockJ1939Fast {
 
     pub fn push(&mut self, buffer: &[u8], _len: isize) -> SockCanOpCode {
         //println!("buffer: {:#02x?}:{:#02x?}  len:{}", buffer[0], buffer[1],len);
+        #[cfg(debug_assertions)]
+        debug!("buffer: {:#02x?}:{:#02x?}  len:{}", buffer[0], buffer[1], _len);
 
         // first message has no frame_idx but len on 2 bytes
         if buffer[0].trailing_zeros() >= 4 {
@@ -341,7 +344,7 @@ impl SockJ1939Fast {
 
             // previous message we uncompleted
             if !self.data.is_empty() {
-                println!("-- data lost: frame_len:{} data_len:{}", self.frame_len, self.data.len());
+                warn!("data lost: frame_len:{} data_len:{}", self.frame_len, self.data.len());
                 self.reset();
             }
 
@@ -520,5 +523,22 @@ impl SockJ1939Filters {
             return Err(CanError::new("fail-j1939-filter", cglue::get_perror()));
         }
         Ok(())
+    }
+}
+
+#[inline]
+#[cfg_attr(not(test), allow(dead_code))]
+fn mask_eff_flag(id: u32) -> u32 {
+    // Drop the CAN_EFF_FLAG (0x8000_0000) if present; keep payload bits.
+    id & 0x7FFF_FFFF
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_mask_eff_flag() {
+        assert_eq!(mask_eff_flag(0x98A8_4444), 0x18A8_4444);
+        assert_eq!(mask_eff_flag(0x18A8_4444), 0x18A8_4444);
     }
 }

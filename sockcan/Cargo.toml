@@ -23,7 +23,8 @@ bitflags = "2"
 bitvec = { version = "1.0", default-features = false }
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json={ version= "1.0", optional = true }
-
+log = "0.4"
+env_logger = "0.11"
 
 [lib]
 name = "sockcan"
