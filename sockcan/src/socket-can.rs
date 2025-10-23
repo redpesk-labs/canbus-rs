@@ -165,10 +165,70 @@ impl CanFdFrameRaw {
     }
 }
 
+/// A tagged container for any received CAN frame or a read outcome.
+///
+/// `CanAnyFrame` abstracts over **Classical CAN** and **CAN FD** raw frames and
+/// can also represent an **I/O error** or a **non-data outcome** (e.g. timeout).
+///
+/// # Variants
+/// - [`CanAnyFrame::RawStd`] — Classical CAN 2.0 frame (up to 8 bytes) backed by
+///   [`CanFrameRaw`]. Its `get_id()` implementation returns the identifier with the
+///   *extended* flag cleared (no `0x8000_0000`).
+/// - [`CanAnyFrame::RawFd`] — CAN FD frame (up to 64 bytes) backed by
+///   [`CanFdFrameRaw`]. Its `get_id()` returns the raw `can_id` as stored by the
+///   kernel/driver. If you need a normalized 29-bit ID, mask with `0x1FFF_FFFF`.
+/// - [`CanAnyFrame::Err`] — An error occurred while reading/decoding the frame
+///   (e.g., short read, invalid size, OS error). `get_id()/get_len()/get_data()`
+///   return this error.
+/// - [`CanAnyFrame::None`] — No payload (e.g., timeout/announce). Carries an
+///   optional `u32` identifier for context; length is reported as `0`, and data
+///   is reported as a one-byte empty view.
+///
+/// # Accessors
+/// Use the convenience methods to extract normalized values when available:
+/// - [`CanAnyFrame::get_id`] → `Result<u32, CanError>`
+/// - [`CanAnyFrame::get_len`] → `Result<u8, CanError>`
+/// - [`CanAnyFrame::get_data`] → `Result<&[u8], CanError>`
+///
+/// These methods forward to the underlying raw type, or return the contained
+/// error for [`Err`], or sensible defaults for [`None`] (ID/0, LEN/0, DATA/&[0]).
+///
+/// > **Note on identifiers:**
+/// > For `RawStd`, the returned ID has the extended flag cleared. For `RawFd`,
+/// > the ID is returned as-is; apply `id & 0x1FFF_FFFF` if you need the 29-bit
+/// > value without protocol flags.
+///
+/// # Example
+/// ```rust
+/// match msg.get_raw() {
+///     CanAnyFrame::RawStd(f) => {
+///         let id = f.get_id();           // 11b or 29b (EFF cleared)
+///         let dlc = f.get_len();
+///         let data = f.get_data();
+///         log::info!("STD {:08X} [{}] {:02X?}", id, dlc, &data[..dlc as usize]);
+///     }
+///     CanAnyFrame::RawFd(f) => {
+///         let id = f.get_id() & 0x1FFF_FFFF; // normalize if needed
+///         let len = f.get_len();
+///         let data = f.get_data();
+///         log::info!("FD  {:08X} [{}] {:02X?}", id, len, &data[..len as usize]);
+///     }
+///     CanAnyFrame::Err(e) => {
+///         log::error!("CAN read error: {e}");
+///     }
+///     CanAnyFrame::None(canid) => {
+///         log::debug!("timeout/announce for id {:08X}", canid);
+///     }
+/// }
+/// ```
 pub enum CanAnyFrame {
+    /// Classical CAN frame (CAN 2.0B).
     RawFd(CanFdFrameRaw),
+    /// CAN FD frame (up to 64 bytes).
     RawStd(CanFrameRaw),
+    /// I/O or decode error while fetching a frame.
     Err(CanError),
+    /// No data (e.g., timeout/announce), with an optional CAN ID context.
     None(u32),
 }
 
