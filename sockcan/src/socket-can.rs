@@ -73,7 +73,93 @@ pub enum CanTimeStamp {
 ///            `CAN_CTRLMODE_CC_LEN8_DLC` flag has to be enabled in CAN driver.
 /// @data:     CAN frame payload (up to 8 byte)
 pub struct CanFrameRaw(pub cglue::can_frame);
+
 impl CanFrameRaw {
+    /// Constructs a classical CAN (2.0) frame wrapper from raw fields.
+    ///
+    /// This initializes an underlying `cglue::can_frame` with the given CAN
+    /// identifier and an **explicit payload length** (`len`, 0..=8). The `data`
+    /// array is always 8 bytes; only the first `len` bytes are considered part of
+    /// the payload. The optional `len8_dlc` field is set to `0` (not used).
+    ///
+    /// > **Identifier note:** `canid` is taken **as-is** (kernel format).
+    /// > If you want a 29-bit extended identifier, include the extended flag
+    /// > (`CAN_EFF_FLAG`, i.e. `0x8000_0000`) yourself. For 11-bit standard IDs,
+    /// > keep that flag cleared.
+    ///
+    /// # Parameters/// Constructs a classical CAN (2.0) frame wrapper from raw fields.
+    ///
+    /// This initializes an underlying `cglue::can_frame` with the given CAN
+    /// identifier and an **explicit payload length** (`len`, 0..=8). The `data`
+    /// array is always 8 bytes; only the first `len` bytes are considered part of
+    /// the payload. The optional `len8_dlc` field is set to `0` (not used).
+    ///
+    /// > **Identifier note:** `canid` is taken **as-is** (kernel format).
+    /// > If you want a 29-bit extended identifier, include the extended flag
+    /// > (`CAN_EFF_FLAG`, i.e. `0x8000_0000`) yourself. For 11-bit standard IDs,
+    /// > keep that flag cleared.
+    ///
+    /// # Parameters
+    /// - `canid`: Raw CAN identifier with protocol flags (e.g. may include
+    ///   `CAN_EFF_FLAG`, `CAN_RTR_FLAG`, `CAN_ERR_FLAG`) as expected by the kernel.
+    /// - `len`: Payload length in bytes (`0..=8`). Caller is responsible for
+    ///   providing a valid value consistent with `data`.
+    /// - `pad`: Value for the kernel `__pad` field (usually `0`).
+    /// - `res`: Value for the kernel reserved field `__res0` (usually `0`).
+    /// - `data`: Fixed 8-byte buffer; only the first `len` bytes are treated as
+    ///   payload.
+    ///
+    /// # Returns
+    /// A `CanFrameRaw` wrapping a fully initialized `can_frame`.
+    ///
+    /// # Safety & invariants
+    /// - No validation is performed: if `len > 8`, the behavior of downstream
+    ///   consumers is undefined; pass a valid DLC (0..=8).
+    /// - Flags inside `canid` are **not** normalized here; set/clear them upstream
+    ///   as appropriate.
+    ///
+    /// # Example
+    /// ```rust
+    /// use crate::sockcan::CanFrameRaw;
+    /// const CAN_EFF_FLAG: u32 = 0x8000_0000;
+    ///
+    /// // Standard ID 0x118, 8-byte payload
+    /// let f_std = CanFrameRaw::new(0x118, 8, 0, 0, [0x59,0x06,0x22,0x18,0x00,0x00,0x00,0x00]);
+    ///
+    /// // Extended ID 0x1DF9050 (29-bit) with EFF flag set
+    /// let ext_id = (0x01DF9050 & 0x1FFF_FFFF) | CAN_EFF_FLAG;
+    /// let f_ext = CanFrameRaw::new(ext_id, 3, 0, 0, [0xDE,0xAD,0xBE,0,0,0,0,0]);
+    /// ```
+    /// - `canid`: Raw CAN identifier with protocol flags (e.g. may include
+    ///   `CAN_EFF_FLAG`, `CAN_RTR_FLAG`, `CAN_ERR_FLAG`) as expected by the kernel.
+    /// - `len`: Payload length in bytes (`0..=8`). Caller is responsible for
+    ///   providing a valid value consistent with `data`.
+    /// - `pad`: Value for the kernel `__pad` field (usually `0`).
+    /// - `res`: Value for the kernel reserved field `__res0` (usually `0`).
+    /// - `data`: Fixed 8-byte buffer; only the first `len` bytes are treated as
+    ///   payload.
+    ///
+    /// # Returns
+    /// A `CanFrameRaw` wrapping a fully initialized `can_frame`.
+    ///
+    /// # Safety & invariants
+    /// - No validation is performed: if `len > 8`, the behavior of downstream
+    ///   consumers is undefined; pass a valid DLC (0..=8).
+    /// - Flags inside `canid` are **not** normalized here; set/clear them upstream
+    ///   as appropriate.
+    ///
+    /// # Example
+    /// ```rust
+    /// use crate::sockcan::CanFrameRaw;
+    /// const CAN_EFF_FLAG: u32 = 0x8000_0000;
+    ///
+    /// // Standard ID 0x118, 8-byte payload
+    /// let f_std = CanFrameRaw::new(0x118, 8, 0, 0, [0x59,0x06,0x22,0x18,0x00,0x00,0x00,0x00]);
+    ///
+    /// // Extended ID 0x1DF9050 (29-bit) with EFF flag set
+    /// let ext_id = (0x01DF9050 & 0x1FFF_FFFF) | CAN_EFF_FLAG;
+    /// let f_ext = CanFrameRaw::new(ext_id, 3, 0, 0, [0xDE,0xAD,0xBE,0,0,0,0,0]);
+    /// ```
     #[must_use]
     pub fn new(canid: SockCanId, len: u8, pad: u8, res: u8, data: [u8; 8usize]) -> Self {
         CanFrameRaw(cglue::can_frame {

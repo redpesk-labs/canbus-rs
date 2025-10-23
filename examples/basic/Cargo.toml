@@ -10,6 +10,7 @@ lib_sockcan= {path ="../../sockcan"}
 lib_dbcparser= {path ="../../dbcparser"}
 log = "0.4"
 env_logger = "0.11"
+regex = "1"
 
 [build-dependencies]
 lib_dbcparser = { path = "../../dbcparser" }
@@ -17,6 +18,11 @@ lib_dbcparser = { path = "../../dbcparser" }
 [[bin]]
 name = "can-read"
 path = "src/read-can.rs"
+
+
+[[bin]]
+name = "load-can-dump"
+path = "src/load-can-dump.rs"
 
 [[bin]]
 name = "can-bmc"
