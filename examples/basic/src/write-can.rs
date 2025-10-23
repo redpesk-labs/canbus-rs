@@ -21,24 +21,18 @@ use sockcan::prelude::generate_frame;
 use sockcan::prelude::CanTimeStamp;
 use sockcan::prelude::SockCanHandle;
 use std::convert::TryInto;
-use std::fs::OpenOptions;
-use std::io::Write; // pour writeln!
 
 //use sockcan::{CanTimeStamp, SockCanHandle, SockCanMsg};
 
 #[derive(Debug, Clone)]
-struct ParsedCan {
-    ts: f64,       // timestamp absolu trouvé dans le dump
-    iface: String, // nom d’interface dans le dump (informative)
+struct ParsedCan2 {
     id: u32,       // identifiant CAN (hex)
     data: Vec<u8>, // payload
 }
 
-fn parse_line(line: &str, re: &Regex) -> Option<ParsedCan> {
+fn parse_line(line: &str, re: &Regex) -> Option<ParsedCan2> {
     // captures: 1=ts  2=iface  3=id_hex  4=data_hex
     let caps = re.captures(line)?;
-    let ts: f64 = caps.get(1)?.as_str().parse().ok()?;
-    let iface = caps.get(2)?.as_str().to_string();
 
     // id en hex sans 0x, peut être 11-bit ou 29-bit; on retire un éventuel bit extended si présent dans ta source
     let id = u32::from_str_radix(caps.get(3)?.as_str(), 16).ok()?;
@@ -54,11 +48,11 @@ fn parse_line(line: &str, re: &Regex) -> Option<ParsedCan> {
         data.push(byte);
     }
 
-    Some(ParsedCan { ts, iface, id, data })
+    Some(ParsedCan2 { id, data })
 }
 
 /// Charge et parse un fichier can-dump
-fn load_dump<P: AsRef<Path>>(path: P) -> Result<Vec<ParsedCan>, String> {
+fn load_dump<P: AsRef<Path>>(path: P) -> Result<Vec<ParsedCan2>, String> {
     let file = File::open(path.as_ref()).map_err(|e| format!("open dump failed: {e}"))?;
     let reader = BufReader::new(file);
 
@@ -82,10 +76,6 @@ fn load_dump<P: AsRef<Path>>(path: P) -> Result<Vec<ParsedCan>, String> {
         }
     }
     Ok(out)
-}
-
-fn to_hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{:02X}", b)).collect::<Vec<_>>().join("")
 }
 
 fn to_fixed_8_exact(v: Vec<u8>) -> Result<[u8; 8], String> {
@@ -114,34 +104,15 @@ fn main() -> Result<(), String> {
 
     log::info!("replay done on {}", iface);
 
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("replay.log")
-        .map_err(|e| e.to_string())?;
-
     let sockfd = match SockCanHandle::open_raw(VCAN, CanTimeStamp::CLASSIC) {
         Err(error) => return Err(format!("fail opening candev {error}")),
         Ok(value) => value,
     };
 
     for rec in records.iter() {
-        let secs = rec.ts.trunc() as i64;
-        let micros = ((rec.ts - secs as f64) * 1_000_000.0).round() as u32;
-        let msg = format!(
-            "({0}.{1:06}) {2} {3:X}#{4}",
-            secs,
-            micros,
-            rec.iface,
-            rec.id,
-            to_hex(&rec.data)
-        );
-
         let data8 = to_fixed_8_exact(rec.data.clone())?;
         let f_std = generate_frame(rec.id, &data8).map_err(|e| e.to_string())?;
         sockfd.write_frame(&f_std).map_err(|e| e.to_string())?;
-        println!("{}", msg);
-        let _ = writeln!(file, "{}", msg);
     }
     Ok(())
 }
