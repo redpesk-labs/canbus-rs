@@ -19,6 +19,9 @@ lib_dbcparser = { path = "../../dbcparser" }
 name = "can-read"
 path = "src/read-can.rs"
 
+[[bin]]
+name = "write-can"
+path = "src/write-can.rs"
 
 [[bin]]
 name = "load-can-dump"

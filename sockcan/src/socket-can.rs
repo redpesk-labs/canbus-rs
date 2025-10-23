@@ -22,7 +22,73 @@ use std::mem::{self};
 
 pub type SockCanId = cglue::canid_t;
 
+// Flag/masks — align with your bindings/constants
 const CAN_EFF_FLAG: u32 = 0x8000_0000;
+const CAN_SFF_MASK: u32 = 0x7FF;
+const CAN_EFF_MASK: u32 = 0x1FFF_FFFF;
+
+/// Normalize a user-provided CAN identifier:
+/// - if `id <= 0x7FF`, return 11-bit Standard ID (no flags)
+/// - else, return 29-bit Extended ID with CAN_EFF_FLAG set
+#[inline]
+fn normalize_can_id(id: u32) -> u32 {
+    if id <= CAN_SFF_MASK {
+        id & CAN_SFF_MASK
+    } else {
+        (id & CAN_EFF_MASK) | CAN_EFF_FLAG
+    }
+}
+
+/// Build a Classical CAN frame (0..=8 bytes)
+#[inline]
+fn build_std_frame(id: u32, data: &[u8]) -> Result<cglue::can_frame, CanError> {
+    if data.len() > 8 {
+        return Err(CanError::new("can-build-std", "payload > 8 bytes; use FD"));
+    }
+
+    // Zero-init then fill only the relevant fields.
+    let mut f: cglue::can_frame = unsafe { mem::zeroed() };
+    f.can_id = normalize_can_id(id);
+    // Classical CAN length (DLC) is stored in the anonymous union field `len`
+    f.__bindgen_anon_1.len = u8::try_from(data.len()).unwrap_or(8);
+    // Copy payload (remaining bytes already zeroed)
+    for (i, b) in data.iter().enumerate() {
+        f.data[i] = *b;
+    }
+    Ok(f)
+}
+
+/// Build a CAN FD frame (0..=64 bytes)
+#[inline]
+fn build_fd_frame(id: u32, data: &[u8], flags: u8) -> Result<cglue::canfd_frame, CanError> {
+    if data.len() > 64 {
+        return Err(CanError::new("can-build-fd", "payload > 64 bytes"));
+    }
+    let mut f: cglue::canfd_frame = unsafe { mem::zeroed() };
+    f.can_id = normalize_can_id(id);
+    f.len = u8::try_from(data.len()).unwrap_or(64);
+    f.flags = flags; // e.g. BRS/ESI as needed by your app/driver
+    for (i, b) in data.iter().enumerate() {
+        f.data[i] = *b;
+    }
+    Ok(f)
+}
+
+/// User-facing helper that decides between Classical CAN and CAN FD.
+///
+/// *If `data.len() <= 8` → Classical; otherwise → FD (with `flags = 0`).*
+pub fn generate_frame(id: u32, data: &[u8]) -> Result<CanAnyFrame, CanError> {
+    if data.len() <= 8 {
+        let f = build_std_frame(id, data)?;
+        // Wrap in your raw type then into CanAnyFrame
+        let raw = CanFrameRaw(f);
+        Ok(CanAnyFrame::RawStd(raw))
+    } else {
+        let f = build_fd_frame(id, data, 0)?;
+        let raw = CanFdFrameRaw(f);
+        Ok(CanAnyFrame::RawFd(raw))
+    }
+}
 
 bitflags! {
     #[derive(PartialEq, Eq, Debug)]
@@ -1115,6 +1181,70 @@ impl SockCanHandle {
         };
 
         SockCanMsg { frame: can_any_frame, iface: info.iface, stamp: info.stamp }
+    }
+    /// Low-level send for Classical CAN
+    pub fn send_std(&self, id: u32, data: &[u8]) -> Result<(), CanError> {
+        let frame = build_std_frame(id, data)?;
+        let n = unsafe {
+            cglue::write(
+                self.sockfd,
+                (&raw const frame).cast::<std::ffi::c_void>(),
+                core::mem::size_of::<cglue::can_frame>(),
+            )
+        };
+        if n < 0 {
+            return Err(CanError::new("can-send-std", cglue::get_perror()));
+        }
+        Ok(())
+    }
+
+    /// Low-level send for CAN FD
+    pub fn send_fd(&self, id: u32, data: &[u8], flags: u8) -> Result<(), CanError> {
+        let frame = build_fd_frame(id, data, flags)?;
+        let n = unsafe {
+            cglue::write(
+                self.sockfd,
+                (&raw const frame).cast::<std::ffi::c_void>(),
+                core::mem::size_of::<cglue::canfd_frame>(),
+            )
+        };
+        if n < 0 {
+            return Err(CanError::new("can-send-fd", cglue::get_perror()));
+        }
+        Ok(())
+    }
+
+    /// Generic writer that accepts `CanAnyFrame` (what your reader returns).
+    pub fn write_frame(&self, frame: &CanAnyFrame) -> Result<(), CanError> {
+        match frame {
+            CanAnyFrame::RawStd(f) => {
+                let n = unsafe {
+                    cglue::write(self.sockfd, f.as_ptr(), core::mem::size_of::<cglue::can_frame>())
+                };
+                if n < 0 {
+                    return Err(CanError::new("can-send-std", cglue::get_perror()));
+                }
+                Ok(())
+            },
+            CanAnyFrame::RawFd(f) => {
+                let n = unsafe {
+                    cglue::write(
+                        self.sockfd,
+                        f.as_ptr(),
+                        core::mem::size_of::<cglue::canfd_frame>(),
+                    )
+                };
+                if n < 0 {
+                    return Err(CanError::new("can-send-fd", cglue::get_perror()));
+                }
+                Ok(())
+            },
+            CanAnyFrame::Err(e) => Err(CanError::new("can-send-invalid", format!("Err: {e}"))),
+            CanAnyFrame::None(id) => Err(CanError::new(
+                "can-send-invalid",
+                format!("None/timeout frame cannot be sent (id={id:08X})"),
+            )),
+        }
     }
 }
 
