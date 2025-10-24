@@ -265,6 +265,55 @@ impl CanFrameRaw {
 }
 pub struct CanFdFrameRaw(pub cglue::canfd_frame);
 impl CanFdFrameRaw {
+    /// Constructs a **CAN FD** frame wrapper from raw fields.
+    ///
+    /// This initializes an underlying `cglue::canfd_frame` with the given CAN
+    /// identifier, **payload length** (`len`, 0..=64), FD **flags**, and data
+    /// buffer. The `data` array is always 64 bytes; only the first `len` bytes are
+    /// considered part of the payload. Remaining bytes are kept as provided.
+    ///
+    /// > **Identifier note:** `canid` is taken **as-is** (kernel format).
+    /// > For a 29-bit extended identifier, include the extended flag yourself
+    /// > (e.g. `CAN_EFF_FLAG`, `0x8000_0000`). For an 11-bit standard ID, leave it cleared.
+    ///
+    /// > **Flags note (FD):** `flags` typically carries CAN FD controls such as:
+    /// > - **BRS** (Bit Rate Switch), often `CANFD_BRS`
+    /// > - **ESI** (Error State Indicator), often `CANFD_ESI`
+    /// > Use the values exposed by your bindings (e.g., `cglue::CANFD_BRS`).
+    ///
+    /// # Parameters
+    /// - `canid`: Raw CAN identifier with protocol flags (EFF/RTR/ERR as expected by the kernel).
+    /// - `len`: Payload length in bytes (`0..=64`). Caller must provide a valid value
+    ///   consistent with `data`.
+    /// - `flags`: CAN FD flags (e.g., BRS/ESI).
+    /// - `res0`, `res1`: Reserved fields passed to the kernel (usually `0`).
+    /// - `data`: Fixed 64-byte buffer; only the first `len` bytes are treated as payload.
+    ///
+    /// # Returns
+    /// A `CanFdFrameRaw` wrapping a fully initialized `canfd_frame`.
+    ///
+    /// # Safety & invariants
+    /// - No validation is performed: if `len > 64`, downstream behavior is undefined.
+    /// - `canid` flags are **not** normalized here; set/clear them upstream.
+    /// - `flags` are **not** interpreted here; pass the appropriate constants for your use case.
+    ///
+    /// # Examples
+    /// ```rust
+    /// // Extended FD frame with BRS, 12-byte payload
+    /// const CAN_EFF_FLAG: u32 = 0x8000_0000;
+    /// let ext_id = (0x18DAF110 & 0x1FFF_FFFF) | CAN_EFF_FLAG;
+    /// let data = [0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08, 0x09,0x0A,0x0B,0x0C,
+    ///             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+    ///             0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+    /// let flags = cglue::CANFD_BRS; // or 0 if no BRS/ESI
+    /// let f_fd = CanFdFrameRaw::new(ext_id, 12, flags, 0, 0, data);
+    ///
+    /// // Standard FD frame (no EFF flag), 3-byte payload, no BRS
+    /// let std_id = 0x123;
+    /// let mut buf = [0u8; 64];
+    /// buf[..3].copy_from_slice(&[0xDE, 0xAD, 0xBE]);
+    /// let f_std_fd = CanFdFrameRaw::new(std_id, 3, 0, 0, 0, buf);
+    /// ```
     #[must_use]
     pub fn new(
         canid: SockCanId,
@@ -608,9 +657,26 @@ pub trait CanIFaceFrom<T> {
 }
 
 impl CanIFaceFrom<&str> for SockCanHandle {
+    /// Resolves a CAN interface name (e.g. `"can0"`, `"vcan0"`) into its kernel index.
+    ///
+    /// This fills an `ifreq` structure with the provided interface name and issues
+    /// `ioctl(SIOCGIFINDEX)` to retrieve the interface index.
+    ///
+    /// * The name is **truncated** to `IFACE_LEN-1` bytes and is always **NUL-terminated**.
+    /// * Any interior `'\0'` byte in `iface` acts as an early terminator (defensive).
+    ///
+    /// # Parameters
+    /// - `sock`: an open CAN socket fd (used only for the ioctl call).
+    /// - `iface`: interface name (`"can0"`, `"vcan0"`, …).
+    ///
+    /// # Returns
+    /// - `< 0` on failure (kernel error code from `ioctl`),
+    /// - interface index (`ifindex`) on success.
     fn map_can_iface(sock: i32, iface: &str) -> i32 {
+        // Zero-init ensures NUL-termination of the name buffer.
         let mut ifreq: cglue::ifreq = unsafe { mem::zeroed() };
 
+        // Copy at most (LEN-1) bytes and stop early if a NUL is present in `iface`.
         let iname = iface.as_bytes();
 
         for (idx, &b) in iname.iter().take(cglue::can_SOCK_x_IFACE_LEN as usize).enumerate() {
@@ -625,12 +691,13 @@ impl CanIFaceFrom<&str> for SockCanHandle {
             }
         }
 
-        // get Can iface index
+        // Query the interface index
         let rc = unsafe { cglue::ioctl(sock, u64::from(cglue::can_SOCK_x_SIOCGIFINDEX), &ifreq) };
 
         if rc < 0 {
             rc
         } else {
+            // ifr_ifindex
             unsafe { ifreq.ifr_ifru.ifru_ivalue } //ifr.ifr_if index
         }
     }
