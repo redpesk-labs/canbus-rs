@@ -8,6 +8,11 @@
  * License: $RP_BEGIN_LICENSE$ SPDX:MIT https://opensource.org/licenses/MIT $RP_END_LICENSE$
  */
 
+// documentation :
+// https://www.csselectronics.com/pages/can-dbc-file-database-intro
+// https://docs.openvehicles.com/en/latest/components/vehicle_dbc/docs/dbc-primer.html
+//
+
 use crate::data::{
     AccessNode, AccessType, AttributeDefault, AttributeDefinition, AttributeValue,
     AttributeValueForObject, AttributeValuedForObjectType, Baudrate, ByteOrder, Comment, DbcError,
@@ -531,7 +536,7 @@ fn access_type(s: &str) -> IResult<&str, AccessType> {
 }
 
 fn access_node_vector_xxx(s: &str) -> IResult<&str, AccessNode> {
-    value(AccessNode::AccessNodeVectorXXX, tag("VECTOR_XXX"))(s)
+    value(AccessNode::AccessNodeVectorXXX, tag("VECTOR__XXX"))(s)
 }
 
 fn access_node_name(s: &str) -> IResult<&str, AccessNode> {

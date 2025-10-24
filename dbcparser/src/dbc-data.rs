@@ -391,9 +391,10 @@ pub struct SignalGroups {
 
 #[derive(Copy, Clone)]
 pub enum SignalExtendedValueType {
-    SignedOrUnsignedInteger,
-    IEEEfloat32Bit,
-    IEEEdouble64bit,
+    SignedOrUnsignedInteger, // 0
+    IEEEfloat32Bit,          // 1
+    IEEEdouble64bit,         // 2
+    Reserved3,               // 3 (for compat)
 }
 
 #[derive(Clone)]
