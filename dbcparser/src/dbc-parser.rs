@@ -49,7 +49,37 @@ fn is_quote(chr: char) -> bool {
     chr == '"'
 }
 
-/// Multispace zero or more
+/// Consume **zero or more** ASCII space characters `' '` from the input.
+///
+/// This helper is similar to `nom::character::complete::space0`, but it is
+/// intentionally **stricter**: it only matches the literal space (U+0020),
+/// **not** tabs, newlines, or other Unicode whitespace.
+///
+/// # Type parameters
+/// - `T`: An input type that supports position-based splitting (e.g. `&str`,
+///   `&[u8]`) via `InputTakeAtPosition`.
+/// - `E`: The error type used by `nom` parsers.
+///
+/// # Returns
+/// - `Ok((rest, matched))` where:
+///   - `matched` is the (possibly empty) prefix consisting only of `' '`
+///     characters,
+///   - `rest` is the remaining input.
+/// - A parsing error only occurs in edge cases where `InputTakeAtPosition`
+///   cannot operate (rare for `&str`/`&[u8]`).
+///
+/// # Notes
+/// - Use this when the DBC grammar requires **spaces only** between tokens.
+/// - If you want to also accept tabs or newlines, prefer `nom::character::complete::space0`
+///   or `multispace0`.
+///
+/// # Examples
+/// ```rust
+/// # use nom::{IResult, error::Error as NomError};
+/// # fn ms0_demo(i: &str) -> IResult<&str, &str> { super::ms0::<_, NomError<&str>>(i) }
+/// assert_eq!(ms0_demo("   BO_"), Ok(("BO_", "   ")));
+/// assert_eq!(ms0_demo("\t BO_"), Ok(("\t BO_", ""))); // tab is NOT consumed
+/// ```
 #[allow(clippy::needless_pass_by_value)]
 fn ms0<T, E: ParseError<T>>(input: T) -> IResult<T, T, E>
 where
@@ -62,7 +92,36 @@ where
     })
 }
 
-/// Multi space one or more
+/// Consume **one or more** ASCII space characters `' '` from the input.
+///
+/// This helper is the “one-or-more” counterpart of [`ms0`]. It is stricter than
+/// `nom::character::complete::space1`: only the literal space (U+0020) is
+/// accepted — **no** tabs or newlines.
+///
+/// # Type parameters
+/// - `T`: An input type that supports position-based splitting (e.g. `&str`,
+///   `&[u8]`) via `InputTakeAtPosition`.
+/// - `E`: The error type used by `nom` parsers.
+///
+/// # Returns
+/// - `Ok((rest, matched))` when at least one space was consumed,
+/// - `Err(Err::Error(_))` with kind `ErrorKind::MultiSpace` if the next
+///   character is not a space (i.e. zero occurrences).
+///
+/// # When to use
+/// - The DBC grammar between tokens requires **at least one** literal space,
+///   and other whitespace (tabs/newlines) must **not** be accepted.
+/// - Otherwise, prefer `space1` / `multispace1` from `nom` for more general
+///   whitespace handling.
+///
+/// # Examples
+/// ```rust
+/// # use nom::{IResult, error::Error as NomError};
+/// # fn ms1_demo(i: &str) -> IResult<&str, &str> { super::ms1::<_, NomError<&str>>(i) }
+/// assert_eq!(ms1_demo("   BO_"), Ok(("BO_", "   ")));
+/// assert!(ms1_demo("BO_").is_err());          // requires at least one space
+/// assert!(ms1_demo("\t BO_").is_err());       // tab is not accepted
+/// ```
 #[allow(clippy::needless_pass_by_value)]
 fn ms1<T, E: ParseError<T>>(input: T) -> IResult<T, T, E>
 where
@@ -208,6 +267,14 @@ fn multiplexer_indicator(s: &str) -> IResult<&str, MultiplexIndicator> {
     alt((multiplexer, multiplexor, multiplexor_and_multiplexed, plain))(s)
 }
 
+/// Parse the `VERSION "..."` clause (one line).
+///
+/// Grammar (simplified):
+/// ```text
+/// VERSION <quoted-string> <newline>
+/// ```
+///
+/// Returns `Version(String)`.
 fn version(s: &str) -> IResult<&str, Version> {
     let (s, _) = multispace0(s)?;
     let (s, _) = tag("VERSION")(s)?;
@@ -275,6 +342,16 @@ fn signal(s: &str) -> IResult<&str, Signal> {
     ))
 }
 
+/// Parse a `BO_` message header and its following `SG_` signals.
+///
+/// Accepts leading whitespace, then:
+/// ```text
+/// BO_ <id:u32> <name:ident> : <size:u64> <transmitter>
+/// [ SG_ ... ]*
+/// ```
+///
+/// Uses `cut()` after `BO_` and header fields to reduce backtracking
+/// and improve error messages.
 fn message(s: &str) -> IResult<&str, Message> {
     let (s, _) = multispace0(s)?;
     let (s, _) = tag("BO_")(s)?;
@@ -899,8 +976,31 @@ pub fn dbc_from_str(dbc_str: &str) -> Result<DbcObject, DbcError<'_>> {
         }),
     }
 }
-
+/// Parses a full DBC file into a `DbcObject`.
+///
+/// This parser uses `nom::sequence::permutation` so that the top-level
+/// sections (version, nodes, messages, etc.) may appear in **any order**.
+/// Many sections are parsed with `many0(...)`, meaning they are optional and
+/// may be repeated.
+///
+/// Returns `Ok((rest, dbc))` where:
+/// - `dbc` is the assembled `DbcObject`,
+/// - `rest` is the unconsumed tail (usually whitespace or empty).
+///
+/// Notes:
+/// - `permutation` requires each sub-parser to succeed **once**; if a sub-parser
+///   is truly optional, wrap it with `opt(...)` (as done for `bit_timing`) or
+///   make it a `many0(...)`.
+/// - Because `many0` can succeed without consuming input, you should ensure
+///   that each repeated parser actually consumes something when input exists
+///   (to avoid infinite loops).
+/// - If you want to ensure the entire input is consumed, consider wrapping the
+///   top-level parser with `all_consuming(...)`.
 fn dbc_parse_str(dbc_str: &str) -> IResult<&str, DbcObject> {
+    // Parse all top-level DBC sections in any order:
+    // - mandatory sections should be plain parsers,
+    // - optional sections should be wrapped with `opt(...)`,
+    // - repeatable sections use `many0(...)`.
     let (
         dbc_str,
         (
@@ -946,9 +1046,11 @@ fn dbc_parse_str(dbc_str: &str) -> IResult<&str, DbcObject> {
         many0(extended_multiplex),
     ))(dbc_str)?;
 
+    // Consume trailing whitespace if any.
     let (dbc_str, _) = multispace0(dbc_str)?;
 
     // return parser DBC object
+    // Assemble final object
     Ok((
         dbc_str,
         DbcObject {
