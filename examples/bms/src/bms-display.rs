@@ -1,115 +1,137 @@
+// examples/bms/src/bms-display.rs
+
 /*
- * Copyright (C) 2015-2023 IoT.bzh Company
- * Author: Fulup Ar Foll <fulup@iot.bzh>
- *
- * Redpesk interface code/config use MIT License and can be freely copy/modified even within proprietary code
- * License: $RP_BEGIN_LICENSE$ SPDX:MIT https://opensource.org/licenses/MIT $RP_END_LICENSE$
- *
+ * Copyright (C) 2015-2023 IoT.bzh
+ * SPDX-License-Identifier: MIT
  */
 
 extern crate serde;
 extern crate sockcan;
 
-// include generated code and Rust module as declare in build.rs->DbcParser::new("DbcSimple")
 include!("./__bms-dbcgen.rs");
 use crate::DbcSimple::CanMsgPool;
 
+use clap::Parser;
+use log::{info, warn};
 use sockcan::prelude::*;
-use std::env;
-use std::str::FromStr;
 
-/// read can messages and decode them with previously generated dbc parser
-/// This example run in two steps
-/// * At compilation time
-///     * generates Rust DBC parser with `build.rs/DbcParser::::fromdbc()`
-///     * include generated RUST dbc parser with socketcan api
-///     * generate `can_display binary`
-/// * At run time
-///     * query dbc parser to get the list of supported canid
-///     * subscribe to corresponding message with provided timers
-///     * on message reception display decoded values
-/// * usage:
-///     * cargo build
-///     * `can_display` vcan0 500 1000
-fn main() -> Result<(), CanError> {
-    let args: Vec<String> = env::args().collect();
-    println!("syntax: {} [vcan0] [rate-ms] [watchdog-ms]", args[0]);
+/// Read CAN messages and decode them with the generated DBC parser (BCM mode).
+///
+/// Examples:
+///   bms-display                           # defaults: --iface vcan0 --rate 500 --watchdog 500
+///   bms-display --iface can0              # pick real interface
+///   bms-display -i vcan0 -r 200 -w 1000   # custom timers (ms)
+#[derive(Debug, Parser)]
+#[command(name = "bms-display", version, about, author)]
+struct Args {
+    /// CAN interface name
+    #[arg(short = 'i', long = "iface", default_value = "vcan0")]
+    iface: String,
 
-    let candev = if args.len() > 1 { args[1].as_str() } else { "vcan0" };
-    let rate = if args.len() > 2 {
-        u64::from_str(args[2].as_str()).expect("rate expect a valid integer")
-    } else {
-        500
+    /// BCM receive timer period in milliseconds (SET_TIMER)
+    #[arg(short = 'r', long = "rate", default_value_t = 500, value_parser = clap::value_parser!(u64).range(1..=60_000))]
+    rate_ms: u64,
+
+    /// BCM watchdog timeout in milliseconds (START_TIMER)
+    #[arg(short = 'w', long = "watchdog", default_value_t = 500, value_parser = clap::value_parser!(u64).range(1..=300_000))]
+    watchdog_ms: u64,
+
+    /// Increase verbosity (can be repeated: -v, -vv)
+    #[arg(short = 'v', action = clap::ArgAction::Count)]
+    verbose: u8,
+}
+
+fn init_logging(verbosity: u8) {
+    // map -v levels to env_logger filters
+    let level = match verbosity {
+        0 => "info",
+        1 => "debug",
+        _ => "trace",
     };
-    let watchdog = if args.len() > 3 {
-        u64::from_str(args[3].as_str()).expect("watch expect a valid integer")
-    } else {
-        500
-    };
+    let env = env_logger::Env::default().default_filter_or(level);
+    let _ = env_logger::Builder::from_env(env).format_timestamp_millis().try_init();
+}
 
-    // try to open candev (exit on Error)
-    let sock = SockCanHandle::open_bcm(candev, CanTimeStamp::CLASSIC)?;
-
-    // get canid list from dbc pool
-    let pool = CanMsgPool::new("dbc-demo");
-
-    // register dbc defined canid
-    for canid in pool.get_ids() {
+fn register_pool_filters(
+    sock: &SockCanHandle,
+    pool: &CanMsgPool,
+    rate_ms: u64,
+    watchdog_ms: u64,
+) -> Result<(), CanError> {
+    for &canid in pool.get_ids().iter() {
         SockBcmCmd::new(
             CanBcmOpCode::RxSetup,
             CanBcmFlag::RX_FILTER_ID
                 | CanBcmFlag::SET_TIMER
                 | CanBcmFlag::START_TIMER
                 | CanBcmFlag::RX_ANNOUNCE_RESUME,
-            *canid,
+            canid,
         )
-        .set_timers(rate, watchdog)
-        .apply(&sock)?;
+        .set_timers(rate_ms, watchdog_ms)
+        .apply(sock)?;
+        info!("Subscribed canid=0x{canid:03X} rate={}ms watchdog={}ms", rate_ms, watchdog_ms);
+    }
+    Ok(())
+}
+
+fn main() -> Result<(), CanError> {
+    let args = Args::parse();
+    init_logging(args.verbose);
+
+    info!("Opening BCM socket on iface {}", args.iface);
+    let sock = SockCanHandle::open_bcm(args.iface.as_str(), CanTimeStamp::CLASSIC)?;
+
+    let pool = CanMsgPool::new("dbc-demo");
+    if pool.get_ids().is_empty() {
+        warn!("DBC pool returned no IDs — nothing to subscribe.");
     }
 
-    // loop on message reception and decode messages
-    let mut count = 0;
+    register_pool_filters(&sock, &pool, args.rate_ms, args.watchdog_ms)?;
+
+    let mut count: u64 = 0;
     loop {
-        count += 1;
+        count = count.saturating_add(1);
 
-        // read a new bmc_msg (only filter canid should be received)
-        let bmc_msg = sock.get_bcm_frame();
+        // Read a BCM message (only filtered CAN IDs should arrive)
+        let bcm_msg = sock.get_bcm_frame();
 
-        // prepare message dbc for parsing
+        // Prepare message for DBC parsing
         let msg_data = CanMsgData {
-            canid: bmc_msg.get_id()?,
-            stamp: bmc_msg.get_stamp(),
-            opcode: bmc_msg.get_opcode(),
-            len: bmc_msg.get_len()?,
-            data: bmc_msg.get_data()?,
+            canid: bcm_msg.get_id()?,
+            stamp: bcm_msg.get_stamp(),
+            opcode: bcm_msg.get_opcode(),
+            len: bcm_msg.get_len()?,
+            data: bcm_msg.get_data()?,
         };
 
-        // try to update message data within dbc parser pool
+        // Feed into the parser pool
         let msg = pool.update(&msg_data)?;
         println!(
-            "\n({}) => CanID:{} opcode:{:?} stamp:{}",
-            count, msg_data.canid, msg_data.opcode, msg_data.stamp
+            "\n({count}) => canid:0x{:03X} opcode:{:?} stamp:{}",
+            msg_data.canid, msg_data.opcode, msg_data.stamp
         );
 
-        // loop on message signal and display values.
-        for sig_rfc in msg.get_signals() {
-            let signal = sig_rfc.borrow();
-            let stamp = signal.get_stamp();
-            let mut sig_age_ms = 0;
+        for sig_ref in msg.get_signals() {
+            let signal = sig_ref.borrow();
+            let age_ms = if signal.get_stamp() > 0 {
+                (msg_data.stamp.saturating_sub(signal.get_stamp())) / 1000
+            } else {
+                0
+            };
 
-            let json =
-                if cfg!(feature = "serde") { signal.to_json() } else { "serde-disable".to_owned() };
+            let json = if cfg!(feature = "serde") {
+                signal.to_json()
+            } else {
+                "serde-disabled".to_owned()
+            };
 
-            if stamp > 0 {
-                sig_age_ms = (msg_data.stamp - signal.get_stamp()) / 1000;
-            }
             println!(
-                "  -- {} value:{:?} status:{:?} age:{}\n     json:{}",
+                "  -- {:<20} value:{:<12?} status:{:<8?} age:{:>6} ms\n     json:{}",
                 signal.get_name(),
                 signal.get_value(),
                 signal.get_status(),
-                sig_age_ms,
-                json,
+                age_ms,
+                json
             );
         }
     }
